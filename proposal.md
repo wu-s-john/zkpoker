@@ -143,10 +143,10 @@ We will now discuss the various game state primitives that we will need to imple
 ```leo
 // A Card is encoded as a u32 bitset with:
 //   - bits [0..12]: exactly one bit set for rank (2=0, 3=1, ..., A=12)
-//   - bits [13..16]: exactly one bit set for suit (♣=0, ♦=1, ♥=2, ♠=3)
+//   - bits [13..16]: exactly one bit set for suit (clover=0, diamond=1, heart=2, spade=3)
 // Examples:
-//   2♣ = 0b_0000_0001
-//   A♠ = 0b_1000_0000_0000_1000_0000_0000
+//   2 Clover = 0b_0000_0001
+//   Ace Spade = 0b_1000_0000_0000_1000_0000_0000
 type Card = u32;
 type Deck = [Card; 52];
 
@@ -595,10 +595,10 @@ Within this transition:
 1. All the shuffles from Alice, Bob, Carol, and David are applied to fairly randomize the deck.  
 2. An initial game state is created, establishing Bob as the big blind (seat 1) and Alice as the small blind (seat 0), with Carol (seat 2) set to act first after the blinds.  
 3. Each player is privately dealt two hole cards. For example:  
-   - Alice (Seat 0): Hole Cards: [2♣, 7♠]
-   - Bob (Seat 1): Hole Cards: [K♥, K♦]
-   - Carol (Seat 2): Hole Cards: [4♣, Q♠]
-   - David (Seat 3): Hole Cards: [A♦, 9♣]
+   - Alice (Seat 0): Hole Cards: [2 Clover, 7 Spade]
+   - Bob (Seat 1): Hole Cards: [King Heart, King Diamond]
+   - Carol (Seat 2): Hole Cards: [4 Clover, Queen Spade]
+   - David (Seat 3): Hole Cards: [Ace Diamond, 9 Clover]
 4. Records are returned for the updated GameState, including the HouseDealer's public deck state and each player's private hand.
 5. Additionally, we create a PlayerActionRequest for Carol to initiate the game.
 
@@ -624,10 +624,10 @@ The small blind is 10 chips, and the big blind is 20 chips. Each player starts w
 
 1) At this point, the house dealer has created the initial GameState with blinds and turn order, dealt private PlayerHand records to each player containing their hole cards, and returned an updated HouseDealerState with next_card_index advanced by 8 (2 cards × 4 players).
    - Each player has 2 hidden cards in a private PlayerHand record:
-     - Alice has 2♣, 7♠
-     - Bob has K♥, K♦  
-     - Carol has 4♣, Q♠
-     - David has A♦, 9♣
+     - Alice has 2 Clover, 7 Spade
+     - Bob has King Heart, King Diamond
+     - Carol has 4 Clover, Queen Spade
+     - David has Ace Diamond, 9 Clover
    - The pot is 30 (10 from Alice's small blind, 20 from Bob's big blind)  
    - Alice and Bob's stacks are 490 and 480 respectively
    - The highest_bet is 20 (Bob's big blind)
@@ -676,16 +676,16 @@ End of Pre-Flop Table → (Seat = 0: Alice, 1: Bob, 2: Carol, 3: David)
 
 | Player | Stack | Contributed | Folded? | All-In? | Hand      | Total Pot = 80 |
 |--------|-------|------------|---------|---------|-----------|----------------|
-| Alice  | 480   | 20         | false   | false   | 2♣, 7♠    | 80             |
-| Bob    | 480   | 20         | false   | false   | K♥, K♦    | 80             |
-| Carol  | 480   | 20         | false   | false   | 4♣, Q♠    | 80             |
-| David  | 480   | 20         | false   | false   | A♦, 9♣    | 80             |
+| Alice  | 480   | 20         | false   | false   | 2 Clover, 7 Spade    | 80             |
+| Bob    | 480   | 20         | false   | false   | King Heart, King Diamond    | 80             |
+| Carol  | 480   | 20         | false   | false   | 4 Clover, Queen Spade    | 80             |
+| David  | 480   | 20         | false   | false   | Ace Diamond, 9 Clover    | 80             |
 
 
 #### 2. FLOP
 ---
 
-1) The HouseDealer deals three community cards (7♥, J♠, A♣):
+1) The HouseDealer deals three community cards (7 Spade, J Clover, A Diamond):
    house_dealer_deal_community_cards() → DealtThreeCommunityCards
 
    The GameStateManager advances the phase:
@@ -730,20 +730,20 @@ End of Pre-Flop Table → (Seat = 0: Alice, 1: Bob, 2: Carol, 3: David)
 
 End of Flop Table → (Seat = 0: Alice, 1: Bob, 2: Carol, 3: David)
 
-Community Cards: 7♥, J♠, A♣
+Community Cards: 7 Spade, J Clover, A Diamond
 
 | Player | Stack | Contributed | Folded? | All-In? | Hand      | Total Pot = 140 |
 |--------|-------|------------|---------|---------|-----------|-----------------|
-| Alice  | 460   | 40         | false   | false   | 2♣, 7♠    | 140             |
-| Bob    | 460   | 40         | false   | false   | K♥, K♦    | 140             |
-| Carol  | 480   | 20         | true    | false   | 4♣, Q♠    | 140             |
-| David  | 460   | 40         | false   | false   | A♦, 9♣    | 140             |
+| Alice  | 460   | 40         | false   | false   | 2 Clover, 7 Spade    | 140             |
+| Bob    | 460   | 40         | false   | false   | King Heart, King Diamond    | 140             |
+| Carol  | 480   | 20         | true    | false   | 4 Clover, Queen Spade    | 140             |
+| David  | 460   | 40         | false   | false   | Ace Diamond, 9 Clover    | 140             |
 
 
 #### 3. TURN
 ---
 
-1) The HouseDealer deals the turn card (J♣):
+1) The HouseDealer deals the turn card (J Clover):
    - The dealer calls house_dealer_deal_one_card(hs), which returns (HouseDealerState, DealtOneCommunityCard).
    - The GameStateManager then calls gsm_advance_phase_turn_river(gs, dealt_card, last_player_action) → (updated_gs, next_request) to advance the phase and create a PlayerActionRequest for the next player to act (in this scenario, Alice).
 
@@ -785,21 +785,21 @@ Community Cards: 7♥, J♠, A♣
 
 End of Turn Table → (Seat = 0: Alice, 1: Bob, 2: Carol, 3: David)
 
-Community Cards: 7♥, J♠, A♣, J♣
+Community Cards: 7 Heart, J Spade, A Clover, J Clover
 
 | Player | Stack | Contributed | Folded? | All-In? | Hand      | Total Pot = 380 |
 |--------|-------|------------|---------|---------|-----------|-----------------|
-| Alice  | 380   | 120        | false   | false   | 2♣, 7♠    | 380             |
-| Bob    | 380   | 120        | false   | false   | K♥, K♦    | 380             |
-| Carol  | 480   | 20         | true    | false   | 4♣, Q♠    | 380             |
-| David  | 380   | 120        | false   | false   | A♦, 9♣    | 380             |
+| Alice  | 380   | 120        | false   | false   | 2 Clover, 7 Spade    | 380             |
+| Bob    | 380   | 120        | false   | false   | King Heart, King Diamond    | 380             |
+| Carol  | 480   | 20         | true    | false   | 4 Clover, Queen Spade    | 380             |
+| David  | 380   | 120        | false   | false   | Ace Diamond, 9 Clover    | 380             |
 
 
 #### 4. RIVER
 ---
 
 1) The HouseDealer deals the final community card:  
-   - The dealer calls `house_dealer_deal_one_card(hs)`, which returns `(HouseDealerState, DealtOneCommunityCard)` for the 5♥.  
+   - The dealer calls `house_dealer_deal_one_card(hs)`, which returns `(HouseDealerState, DealtOneCommunityCard)` for the 5 Heart.  
    - The `GameStateManager` then calls `gsm_advance_phase_turn_river(gs, dealt_card, last_player_action) -> (updated_gs, next_request)` to advance to the river phase and issue a `PlayerActionRequest`.
 
 2) Alice bets 100:  
@@ -835,43 +835,43 @@ Community Cards: 7♥, J♠, A♣, J♣
 
 End of River Table → (Seat = 0: Alice, 1: Bob, 2: Carol, 3: David)
 
-Community Cards: 7♥, J♠, A♣, J♣, 5♥
+Community Cards: 7 Heart, J  Spade, A Clover, J Clover, 5 Heart
 
 | Player | Stack | Contributed | Folded? | All-In? | Hand      | Total Pot = 860 |
 |--------|-------|------------|---------|---------|-----------|-----------------|
-| Alice  | 280   | 220        | **true**| false   | 2♣, 7♠    | 860             |
-| Bob    | 0     | 500        | false   | true    | K♥, K♦    | 860             |
-| Carol  | 480   | 20         | true    | false   | 4♣, Q♠    | 860             |
-| David  | 0     | 500        | false   | true    | A♦, 9♣    | 860             |
+| Alice  | 280   | 220        | **true**| false   | 2 Clover, 7  Spade    | 860             |
+| Bob    | 0     | 500        | false   | true    | K Heart, K Diamond    | 860             |
+| Carol  | 480   | 20         | true    | false   | 4 Clover, Q  Spade    | 860             |
+| David  | 0     | 500        | false   | true    | A Diamond, 9 Clover    | 860             |
 
 
 #### Determining the winner
 
-At the end of the River round, the game enters the Showdown phase. By this point, the HouseDealer has revealed five community cards (7♥, J♠, A♣, J♣, 5♥), and each active player still in the hand shows their hole cards to form the best five-card combination. Let's consider the final scenario given our table:
+At the end of the River round, the game enters the Showdown phase. By this point, the HouseDealer has revealed five community cards (7 Heart, J  Spade, A Clover, J Clover, 5 Heart), and each active player still in the hand shows their hole cards to form the best five-card combination. Let's consider the final scenario given our table:
 
 **Community Cards Recap**
 
-- Flop: [7♥, J♠, A♣]  
-- Turn: [J♣]  
-- River: [5♥]
+- Flop: [7 Heart, J  Spade, A Clover]  
+- Turn: [J Clover]  
+- River: [5 Heart]
 
 **Player Hole Cards**
 
 - Alice (Seat 0):
   Hole Cards: (Seat 1, folded earlier, does not show cards)
 - Bob (Seat 1):
-  Hole Cards: [K♥, K♦]
+  Hole Cards: [K Heart, K Diamond]
 - Carol (Seat 2, folded earlier, does not show cards)
 - David (Seat 3):
-  Hole Cards: [A♦, 9♣]
+  Hole Cards: [A Diamond, 9 Clover]
 
 #### Final 5-Card Hands
 ---
 
 - Alice's is out of the running since she folded.
-- Bob's Best 5: [J♠, J♣, K♥, K♦, A♣]
+- Bob's Best 5: [J  Spade, J Clover, K Heart, K Diamond, A Clover]
   → He has Two Pair, Kings and Jacks, with an Ace kicker.
-- David's Best 5: [J♠, J♣, A♣, A♦, 9♣]
+- David's Best 5: [J  Spade, J Clover, A Clover, A Diamond, 9 Clover]
   → He finishes with Two Pair, Aces and Jacks, featuring a 9 kicker.
 - Carol is out of the running since she folded and does not go to showdown.
 
