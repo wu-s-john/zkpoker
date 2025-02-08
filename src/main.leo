@@ -1,7 +1,11 @@
 // The 'hello' program.
 program zkpoker.aleo {
+    // -----------------------------------
+    // HouseDealer Functions and Transitions
+    // -----------------------------------
     struct Card {
-        val: u32
+        val: u32,
+        index: u8
     }
 
     struct Deck {
@@ -27,6 +31,179 @@ program zkpoker.aleo {
         cards: [Card; 3],
         room_id: u32,
         is_next_phase_turn: bool
+    }
+
+    transition house_dealer_shuffle_random(
+        house_dealer_state: HouseDealerState, 
+        perm1: [u8; 26],
+        perm2: [u8; 26],
+    ) -> HouseDealerState {
+        // Validate permutations first...
+        // ... (validation code stays the same)
+        assert(verify_permutation(perm1, perm2));
+
+        // Create the new deck with all calculated positions
+        let new_deck: Deck = apply_card_permutation(house_dealer_state.deck, perm1, perm2);
+
+        return HouseDealerState {
+            owner: house_dealer_state.owner,
+            deck: new_deck,
+            next_card_index: 0u8
+        };
+    }
+
+    function verify_permutation(
+        perm1: [u8; 26],
+        perm2: [u8; 26]
+    ) -> bool {
+        let bitset: u64 = 0u64;
+        for i: u8 in 0u8..26u8 {
+            bitset |= 1u64 << perm1[i];
+            bitset |= 1u64 << perm2[i];
+        }
+        return bitset == 0u64;
+    }
+
+    inline apply_card_permutation(
+        deck: Deck,
+        perm1: [u8; 26],
+        perm2: [u8; 26]
+    ) -> Deck {
+        let card0: Card = get_card(deck.cards1, deck.cards2, perm1[0u8]);
+        let card1: Card = get_card(deck.cards1, deck.cards2, perm1[1u8]);
+        let card2: Card = get_card(deck.cards1, deck.cards2, perm1[2u8]);
+        let card3: Card = get_card(deck.cards1, deck.cards2, perm1[3u8]);
+        let card4: Card = get_card(deck.cards1, deck.cards2, perm1[4u8]);
+        let card5: Card = get_card(deck.cards1, deck.cards2, perm1[5u8]);
+        let card6: Card = get_card(deck.cards1, deck.cards2, perm1[6u8]);
+        let card7: Card = get_card(deck.cards1, deck.cards2, perm1[7u8]);
+        let card8: Card = get_card(deck.cards1, deck.cards2, perm1[8u8]);
+        let card9: Card = get_card(deck.cards1, deck.cards2, perm1[9u8]);
+        let card10: Card = get_card(deck.cards1, deck.cards2, perm1[10u8]);
+        let card11: Card = get_card(deck.cards1, deck.cards2, perm1[11u8]);
+        let card12: Card = get_card(deck.cards1, deck.cards2, perm1[12u8]);
+        let card13: Card = get_card(deck.cards1, deck.cards2, perm1[13u8]);
+        let card14: Card = get_card(deck.cards1, deck.cards2, perm1[14u8]);
+        let card15: Card = get_card(deck.cards1, deck.cards2, perm1[15u8]);
+        let card16: Card = get_card(deck.cards1, deck.cards2, perm1[16u8]);
+        let card17: Card = get_card(deck.cards1, deck.cards2, perm1[17u8]);
+        let card18: Card = get_card(deck.cards1, deck.cards2, perm1[18u8]);
+        let card19: Card = get_card(deck.cards1, deck.cards2, perm1[19u8]);
+        let card20: Card = get_card(deck.cards1, deck.cards2, perm1[20u8]);
+        let card21: Card = get_card(deck.cards1, deck.cards2, perm1[21u8]);
+        let card22: Card = get_card(deck.cards1, deck.cards2, perm1[22u8]);
+        let card23: Card = get_card(deck.cards1, deck.cards2, perm1[23u8]);
+        let card24: Card = get_card(deck.cards1, deck.cards2, perm1[24u8]);
+        let card25: Card = get_card(deck.cards1, deck.cards2, perm1[25u8]);
+        let card26: Card = get_card(deck.cards1, deck.cards2, perm2[0u8]);
+        let card27: Card = get_card(deck.cards1, deck.cards2, perm2[1u8]);
+        let card28: Card = get_card(deck.cards1, deck.cards2, perm2[2u8]);
+        let card29: Card = get_card(deck.cards1, deck.cards2, perm2[3u8]);
+        let card30: Card = get_card(deck.cards1, deck.cards2, perm2[4u8]);
+        let card31: Card = get_card(deck.cards1, deck.cards2, perm2[5u8]);
+        let card32: Card = get_card(deck.cards1, deck.cards2, perm2[6u8]);
+        let card33: Card = get_card(deck.cards1, deck.cards2, perm2[7u8]);
+        let card34: Card = get_card(deck.cards1, deck.cards2, perm2[8u8]);
+        let card35: Card = get_card(deck.cards1, deck.cards2, perm2[9u8]);
+        let card36: Card = get_card(deck.cards1, deck.cards2, perm2[10u8]);
+        let card37: Card = get_card(deck.cards1, deck.cards2, perm2[11u8]);
+        let card38: Card = get_card(deck.cards1, deck.cards2, perm2[12u8]);
+        let card39: Card = get_card(deck.cards1, deck.cards2, perm2[13u8]);
+        let card40: Card = get_card(deck.cards1, deck.cards2, perm2[14u8]);
+        let card41: Card = get_card(deck.cards1, deck.cards2, perm2[15u8]);
+        let card42: Card = get_card(deck.cards1, deck.cards2, perm2[16u8]);
+        let card43: Card = get_card(deck.cards1, deck.cards2, perm2[17u8]);
+        let card44: Card = get_card(deck.cards1, deck.cards2, perm2[18u8]);
+        let card45: Card = get_card(deck.cards1, deck.cards2, perm2[19u8]);
+        let card46: Card = get_card(deck.cards1, deck.cards2, perm2[20u8]);
+        let card47: Card = get_card(deck.cards1, deck.cards2, perm2[21u8]);
+        let card48: Card = get_card(deck.cards1, deck.cards2, perm2[22u8]);
+        let card49: Card = get_card(deck.cards1, deck.cards2, perm2[23u8]);
+        let card50: Card = get_card(deck.cards1, deck.cards2, perm2[24u8]);
+        let card51: Card = get_card(deck.cards1, deck.cards2, perm2[25u8]);
+
+
+        // Create the new deck with all calculated positions
+        let new_deck: Deck = Deck {
+            cards1: [
+                card0, card1, card2, card3, card4, card5, 
+                card6, card7, card8, card9, card10, card11, 
+                card12, card13, card14, card15, card16, card17, 
+                card18, card19, card20, card21, card22, card23, 
+                card24, card25
+            ],
+            cards2: [
+                card26, card27, card28, card29, card30, card31,
+                card32, card33, card34, card35, card36, card37,
+                card38, card39, card40, card41, card42, card43,
+                card44, card45, card46, card47, card48, card49,
+                card50, card51
+            ]
+        };
+
+        return new_deck;
+    }
+
+    
+
+    function get_card(
+        deck1: [Card; 26],
+        deck2: [Card; 26],
+        index: u8 // the index value can go from 0 to 51
+    ) -> Card {
+        if index == 0u8      { return deck1[0u8]; }
+        else if index == 1u8 { return deck1[1u8]; }
+        else if index == 2u8 { return deck1[2u8]; }
+        else if index == 3u8 { return deck1[3u8]; }
+        else if index == 4u8 { return deck1[4u8]; }
+        else if index == 5u8 { return deck1[5u8]; }
+        else if index == 6u8 { return deck1[6u8]; }
+        else if index == 7u8 { return deck1[7u8]; }
+        else if index == 8u8 { return deck1[8u8]; }
+        else if index == 9u8 { return deck1[9u8]; }
+        else if index == 10u8 { return deck1[10u8]; }
+        else if index == 11u8 { return deck1[11u8]; }
+        else if index == 12u8 { return deck1[12u8]; }
+        else if index == 13u8 { return deck1[13u8]; }
+        else if index == 14u8 { return deck1[14u8]; }
+        else if index == 15u8 { return deck1[15u8]; }
+        else if index == 16u8 { return deck1[16u8]; }
+        else if index == 17u8 { return deck1[17u8]; }
+        else if index == 18u8 { return deck1[18u8]; }
+        else if index == 19u8 { return deck1[19u8]; }
+        else if index == 20u8 { return deck1[20u8]; }
+        else if index == 21u8 { return deck1[21u8]; }
+        else if index == 22u8 { return deck1[22u8]; }
+        else if index == 23u8 { return deck1[23u8]; }
+        else if index == 24u8 { return deck1[24u8]; }
+        else if index == 25u8 { return deck1[25u8]; }
+        else if index == 26u8 { return deck2[0u8]; }
+        else if index == 27u8 { return deck2[1u8]; }
+        else if index == 28u8 { return deck2[2u8]; }
+        else if index == 29u8 { return deck2[3u8]; }
+        else if index == 30u8 { return deck2[4u8]; }
+        else if index == 31u8 { return deck2[5u8]; }
+        else if index == 32u8 { return deck2[6u8]; }
+        else if index == 33u8 { return deck2[7u8]; }
+        else if index == 34u8 { return deck2[8u8]; }
+        else if index == 35u8 { return deck2[9u8]; }
+        else if index == 36u8 { return deck2[10u8]; }
+        else if index == 37u8 { return deck2[11u8]; }
+        else if index == 38u8 { return deck2[12u8]; }
+        else if index == 39u8 { return deck2[13u8]; }
+        else if index == 40u8 { return deck2[14u8]; }
+        else if index == 41u8 { return deck2[15u8]; }
+        else if index == 42u8 { return deck2[16u8]; }
+        else if index == 43u8 { return deck2[17u8]; }
+        else if index == 44u8 { return deck2[18u8]; }
+        else if index == 45u8 { return deck2[19u8]; }
+        else if index == 46u8 { return deck2[20u8]; }
+        else if index == 47u8 { return deck2[21u8]; }
+        else if index == 48u8 { return deck2[22u8]; }
+        else if index == 49u8 { return deck2[23u8]; }
+        else if index == 50u8 { return deck2[24u8]; }
+        else if index == 51u8 { return deck2[25u8]; }
+        return deck2[0u8];
     }
 
     // A simple struct for a player's public data 
