@@ -127,6 +127,12 @@ program zkpoker.aleo {
         num_joined_users: u8
     }
 
+    record RoomConfigRequest {
+        room_id: u32,
+        room_config: RoomConfig,
+        owner: address
+    }
+
     // -----------------------------------
     // RoomManager Transitions
     // -----------------------------------
@@ -237,13 +243,44 @@ program zkpoker.aleo {
         Mapping::set(rooms, room_id, updated_config);
     }
 
-    // async function finalize_update_room(room_id: u32, updated_config: RoomConfig) {
-    //     // Update the room configuration in the mapping
-    //     Mapping::set(rooms, room_id, updated_config);
-    // }
+    async transition rm_request_game_creation(room_id: u32, room_config: RoomConfig, dealer_address: address) -> (RoomConfigRequest, HouseDealerCreateDeckRequest, Future) {
+        // Get the current room configuration
+        
+        // Verify room is full
+        assert(room_config.num_joined_users == room_config.seats);
+        assert(room_config.num_joined_users == 4u8);
+        
+        // Create deck request with room details
+        let deck_request: HouseDealerCreateDeckRequest = HouseDealerCreateDeckRequest {
+            room_id: room_id,
+            owner: dealer_address,
+        };
 
-    transition meat(public a: u32, b: u32) -> u32 {
-        let c: u32 = a + b;
-        return c;
+        let room_config_request: RoomConfigRequest = RoomConfigRequest {
+            room_id: room_id,
+            room_config: room_config,
+            owner: dealer_address
+        };
+
+        // Create finalize future to see if the game config is valid
+        let f: Future = finalize_request_game_creation(room_id, room_config);
+        
+        return (room_config_request, deck_request, f);
+    }
+
+    async function finalize_request_game_creation(room_id: u32, room_config: RoomConfig) {
+        // Remove the room from available rooms since game is starting
+        let queried_config: RoomConfig = Mapping::get(rooms, room_id);
+
+    assert(queried_config.big_blind == room_config.big_blind);
+    assert(queried_config.small_blind == room_config.small_blind);
+    assert(queried_config.min_stack == room_config.min_stack);
+    assert(queried_config.seats == room_config.seats);
+    assert(queried_config.num_joined_users == room_config.num_joined_users);
+
+    assert(queried_config.joined_users[0u8] == room_config.joined_users[0u8]);
+    assert(queried_config.joined_users[1u8] == room_config.joined_users[1u8]);
+    assert(queried_config.joined_users[2u8] == room_config.joined_users[2u8]);
+    assert(queried_config.joined_users[3u8] == room_config.joined_users[3u8]);
     }
 }
