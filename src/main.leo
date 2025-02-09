@@ -15,8 +15,10 @@ program zkpoker.aleo {
 
     record HouseDealerState {
         owner: address,
+        room_id: u32,
         deck: Deck,            // The shuffled deck of 52 cards (public here)
-        next_card_index: u8    // The pointer to the next card to deal (public)
+        next_card_index: u8,   // The pointer to the next card to deal (public)
+        player_addresses: [address; 4] // The addresses of the players in the game
     }
 
     struct Permutation {
@@ -270,11 +272,170 @@ program zkpoker.aleo {
         // 3) Return the updated HouseDealerState.
         return HouseDealerState {
             owner: self.caller,
+            room_id: hs.room_id,
             deck: final_perm_deck,
-            next_card_index: 0u8
+            next_card_index: 0u8,
+            player_addresses: [
+                shf1.seat_owner,
+                shf2.seat_owner,
+                shf3.seat_owner,
+                shf4.seat_owner
+            ]
         };
     }
 
+
+    transition house_dealer_deal_player_cards(
+        hs: HouseDealerState
+    ) -> (HouseDealerState, PlayerHand, PlayerHand, PlayerHand, PlayerHand) {
+
+        // Copy the current deck and the index pointing to the next card
+        let deck: Deck = hs.deck;
+        let start_index: u8 = hs.next_card_index;
+
+        // Extract two cards for each of the 4 seats
+        let card0_1: Card = deck.cards1[0u8];
+        let card0_2: Card = deck.cards1[1u8];
+        let card1_1: Card = deck.cards1[2u8];
+        let card1_2: Card = deck.cards1[3u8];
+        let card2_1: Card = deck.cards1[4u8];
+        let card2_2: Card = deck.cards1[5u8];
+        let card3_1: Card = deck.cards1[6u8];
+        let card3_2: Card = deck.cards1[7u8];
+
+        // Update the dealer state to point to the next card
+        let new_dealer_state: HouseDealerState = HouseDealerState {
+            owner: self.caller,
+            deck: deck,
+            room_id: hs.room_id,
+            next_card_index: 8u8,
+            player_addresses: hs.player_addresses
+        };
+
+        // Create player hand records (sample placeholders for 'owner')
+        let p0_hand: PlayerHand = PlayerHand {
+            owner: hs.player_addresses[0u8], 
+            hole_cards: [card0_1, card0_2]
+        };
+        let p1_hand: PlayerHand = PlayerHand {
+            owner: hs.player_addresses[1u8], 
+            hole_cards: [card1_1, card1_2]
+        };
+        let p2_hand: PlayerHand = PlayerHand {
+            owner: hs.player_addresses[2u8], 
+            hole_cards: [card2_1, card2_2]
+        };
+        let p3_hand: PlayerHand = PlayerHand {
+            owner: hs.player_addresses[3u8], 
+            hole_cards: [card3_1, card3_2]
+        };
+
+        // Return the updated HouseDealerState as well as each player's new hand
+        return (
+            new_dealer_state,
+            p0_hand,
+            p1_hand,
+            p2_hand,
+            p3_hand
+        );
+    }
+
+    transition house_dealer_deal_flop(hs: HouseDealerState, game_state_manager_address: address) -> (HouseDealerState, DealtThreeCommunityCards) {
+        // Copy the current deck and the index of the next card
+        let deck: Deck = hs.deck;
+        let start_index: u8 = hs.next_card_index;
+
+        assert(start_index == 8u8);
+
+
+        // Burn the first card and pull the next 3 cards from the deck
+        let flop_card_1: Card = deck.cards1[9u8];
+        let flop_card_2: Card = deck.cards1[10u8];
+        let flop_card_3: Card = deck.cards1[11u8];
+
+        // Update the dealer state to point to the next card
+        let new_dealer_state: HouseDealerState = HouseDealerState {
+            owner: self.caller,
+            room_id: hs.room_id,
+            deck: deck,
+            next_card_index: 12u8,
+            player_addresses: hs.player_addresses
+        };
+
+        // Create the DealtThreeCommunityCards record
+        // Using sample/placeholder values for room_id and is_next_phase_turn
+        let dealt_three: DealtThreeCommunityCards = DealtThreeCommunityCards {
+            owner: game_state_manager_address,
+            cards: [flop_card_1, flop_card_2, flop_card_3],
+            room_id: hs.room_id,
+            is_next_phase_turn: true,
+        };
+
+        // Return both the updated dealer state and the record of dealt cards
+        return (new_dealer_state, dealt_three);
+    }
+
+    transition house_dealer_deal_turn(hs: HouseDealerState, game_state_manager_address: address) -> (HouseDealerState, DealtOneCommunityCard) {
+        // Copy the current deck and the index of the next card
+        let deck: Deck = hs.deck;
+        let start_index: u8 = hs.next_card_index;
+
+        assert(start_index == 12u8);
+
+        // The card to actually deal (turn or river)
+        let deal_card: Card = deck.cards1[13u8];
+
+        // Update the dealer state, advancing past the burn card and the dealt card
+        let new_dealer_state: HouseDealerState = HouseDealerState {
+            owner: self.caller,
+            room_id: hs.room_id,
+            deck: deck,
+            next_card_index: 14u8,
+            player_addresses: hs.player_addresses
+        };
+
+        // Prepare the DealtOneCommunityCard record
+        let dealt_one: DealtOneCommunityCard = DealtOneCommunityCard {
+            owner: game_state_manager_address,
+            card: deal_card,
+            is_turn: true,
+            room_id: hs.room_id
+        };
+
+        return (new_dealer_state, dealt_one);
+    }
+
+    transition house_dealer_deal_river(hs: HouseDealerState, game_state_manager_address: address) -> (HouseDealerState, DealtOneCommunityCard) {
+        // Copy the current deck and the index of the next card
+        let deck: Deck = hs.deck;
+        let start_index: u8 = hs.next_card_index;
+
+        // For example, ensure we've just dealt the turn (start_index == 14u8).
+        assert(start_index == 14u8);
+
+        // Take the card at index 15 as the river card
+        let deal_card: Card = deck.cards1[15u8];
+
+        // Update the dealer state, advancing to index 16
+        let new_dealer_state: HouseDealerState = HouseDealerState {
+            owner: self.caller,
+            room_id: hs.room_id,
+            deck: deck,
+            next_card_index: 16u8,
+            player_addresses: hs.player_addresses
+        };
+
+        // Prepare the DealtOneCommunityCard record
+        let dealt_one: DealtOneCommunityCard = DealtOneCommunityCard {
+            owner: game_state_manager_address,
+            card: deal_card,
+            // Since this is the river, "is_turn" is false
+            is_turn: false,
+            room_id: hs.room_id
+        };
+
+        return (new_dealer_state, dealt_one);
+    }
 
     inline check_deck_matches_final_perm(
         final_perm_deck: Deck,
