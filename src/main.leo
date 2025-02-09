@@ -474,7 +474,7 @@ program zkpoker.aleo {
         return product == product_sorted;
     }
 
-    function verify_permutation(
+    inline verify_permutation(
         perm: Permutation
     ) -> bool {
         let bitset: u64 = 0u64;
@@ -482,7 +482,7 @@ program zkpoker.aleo {
             bitset |= 1u64 << perm.perm1[i];
             bitset |= 1u64 << perm.perm2[i];
         }
-        return bitset == 0u64;
+        return bitset == 0u64; // TODO: This is a placeholder
     }
 
     
@@ -501,8 +501,7 @@ program zkpoker.aleo {
         seat_index: u8,
         seat_owner: address,
         dealer_nonce: u64,
-        perm1: [u8; 26],
-        perm2: [u8; 26],
+        perm: Permutation,
         player_randomness: scalar // players are incentivized to provide randomness for the permutation check
     }
 
@@ -536,6 +535,33 @@ program zkpoker.aleo {
         did_fold: bool,        // Whether the player folded
         final_score: u32,      // The numerical score of the hand (private or revealed)
         player_hand: [Card; 2] // The player's hole cards (private)
+    }
+
+    transition player_propose_shuffle(
+        perm: Permutation, 
+        hs_shuffle_request: HouseDealerShuffleRequest
+    ) -> PlayerProposedShuffle {
+        // Optional: Ensure that only the request owner can propose the shuffle.
+        // Depending on your desired security model, you could also check that
+        // self.caller is indeed the seat owner for hs_shuffle_request.seat_index.
+        assert(hs_shuffle_request.owner == self.caller);
+
+        assert(verify_permutation(perm));
+
+        // Create and return the PlayerProposedShuffle record.
+        // In a real flow, you might set dealer_nonce or player_randomness from
+        // user input, off-chain randomness, etc. Here we'll use placeholders.
+        let proposed_shuffle: PlayerProposedShuffle = PlayerProposedShuffle {
+            owner: self.caller,
+            room_id: hs_shuffle_request.room_id,
+            seat_index: hs_shuffle_request.seat_index,
+            seat_owner: self.caller,
+            dealer_nonce: 0u64,              // placeholder
+            perm: perm,
+            player_randomness: 0scalar      // placeholder
+        };
+
+        return proposed_shuffle;
     }
 
     // The main GameState struct holds publicly visible information.
