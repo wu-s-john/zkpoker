@@ -19,6 +19,24 @@ program zkpoker.aleo {
         next_card_index: u8    // The pointer to the next card to deal (public)
     }
 
+    struct Permutation {
+        perm1: [u8; 26],
+        perm2: [u8; 26],
+    }
+
+    record HouseDealerProposedShuffled {
+        owner: address,
+        perm: Permutation,
+        room_id: u32,
+        nonce: u64
+    }
+
+    record HouseDealerShuffleRequest {
+        owner: address,
+        room_id: u32,
+        seat_index: u8,
+    }
+
     record DealtOneCommunityCard {
         owner: address,
         card: Card,
@@ -35,125 +53,273 @@ program zkpoker.aleo {
 
     struct KeyValue {
         k: u8,
-        v: Card
+        v: u8
     }
 
-    transition shuffle_deck(
-        house_dealer_state: HouseDealerState,
-        perm1: [u8; 26],
-        perm2: [u8; 26],
-        sorted_deck1: [KeyValue; 26],
-        sorted_deck2: [KeyValue; 26]
-    ) -> HouseDealerState {
-        // Make sure that the permutation values match with their sorted_deck index.
+    struct PermutatedTable {
+        perm1: [KeyValue; 26],
+        perm2: [KeyValue; 26],
+    }
+
+    function apply_permutation(
+        current_perm: Permutation,
+        perm_table: PermutatedTable,
+        random_alpha: field,
+        random_beta: field
+    ) -> Permutation {
+        // Make sure that the permutation values match with their perm_table index.
         for i: u8 in 0u8..26u8 {
-            assert(perm1[i] == sorted_deck1[i].k);
-            assert(perm2[i] == sorted_deck2[i].k);
+            assert(current_perm.perm1[i] == perm_table.perm1[i].k);
+            assert(current_perm.perm2[i] == perm_table.perm2[i].k);
         }
 
         // Verify the grand product over both halves.
-        assert(grand_product_permutation_check(perm1, perm2, sorted_deck1, sorted_deck2));
+        assert(grand_product_permutation_check(random_alpha, random_beta, current_perm, perm_table));
 
         // Collect the 52 cards into two arrays of 26.
-        let new_deck: Deck = Deck {
-            cards1: [
-                sorted_deck1[0u32].v,
-                sorted_deck1[1u32].v,
-                sorted_deck1[2u32].v,
-                sorted_deck1[3u32].v,
-                sorted_deck1[4u32].v,
-                sorted_deck1[5u32].v,
-                sorted_deck1[6u32].v,
-                sorted_deck1[7u32].v,
-                sorted_deck1[8u32].v,
-                sorted_deck1[9u32].v,
-                sorted_deck1[10u32].v,
-                sorted_deck1[11u32].v,
-                sorted_deck1[12u32].v,
-                sorted_deck1[13u32].v,
-                sorted_deck1[14u32].v,
-                sorted_deck1[15u32].v,
-                sorted_deck1[16u32].v,
-                sorted_deck1[17u32].v,
-                sorted_deck1[18u32].v,
-                sorted_deck1[19u32].v,
-                sorted_deck1[20u32].v,
-                sorted_deck1[21u32].v,
-                sorted_deck1[22u32].v,
-                sorted_deck1[23u32].v,
-                sorted_deck1[24u32].v,
-                sorted_deck1[25u32].v,
-            ],
-            cards2: [
-                sorted_deck2[0u32].v,
-                sorted_deck2[1u32].v,
-                sorted_deck2[2u32].v,
-                sorted_deck2[3u32].v,
-                sorted_deck2[4u32].v,
-                sorted_deck2[5u32].v,
-                sorted_deck2[6u32].v,
-                sorted_deck2[7u32].v,
-                sorted_deck2[8u32].v,
-                sorted_deck2[9u32].v,
-                sorted_deck2[10u32].v,
-                sorted_deck2[11u32].v,
-                sorted_deck2[12u32].v,
-                sorted_deck2[13u32].v,
-                sorted_deck2[14u32].v,
-                sorted_deck2[15u32].v,
-                sorted_deck2[16u32].v,
-                sorted_deck2[17u32].v,
-                sorted_deck2[18u32].v,
-                sorted_deck2[19u32].v,
-                sorted_deck2[20u32].v,
-                sorted_deck2[21u32].v,
-                sorted_deck2[22u32].v,
-                sorted_deck2[23u32].v,
-                sorted_deck2[24u32].v,
-                sorted_deck2[25u32].v,
-            ]
+        let new_perm: Permutation = build_permutation(perm_table);
+
+        return new_perm;
+    }
+
+    transition house_dealer_provide_shuffle(
+        create_deck_request: HouseDealerCreateDeckRequest,
+        perm: Permutation,
+        room_id: u32
+    ) -> (HouseDealerProposedShuffled, HouseDealerShuffleRequest, HouseDealerShuffleRequest, HouseDealerShuffleRequest, HouseDealerShuffleRequest) {
+        let shuffled: HouseDealerProposedShuffled = HouseDealerProposedShuffled {
+            owner: self.caller,
+            perm: perm,
+            room_id: room_id,
+            nonce: 0u64
         };
 
+        let request1: HouseDealerShuffleRequest = HouseDealerShuffleRequest {
+            owner: create_deck_request.player_addresses[0u8],
+            room_id: room_id,
+            seat_index: 0u8
+        };
+
+        let request2: HouseDealerShuffleRequest = HouseDealerShuffleRequest {
+            owner: create_deck_request.player_addresses[1u8],
+            room_id: room_id,
+            seat_index: 1u8
+        };
+
+        let request3: HouseDealerShuffleRequest = HouseDealerShuffleRequest {
+            owner: create_deck_request.player_addresses[2u8],
+            room_id: room_id,
+            seat_index: 2u8
+        };
+
+        let request4: HouseDealerShuffleRequest = HouseDealerShuffleRequest {
+            owner: create_deck_request.player_addresses[3u8],
+            room_id: room_id,
+            seat_index: 3u8
+        };
+
+        return (shuffled, request1, request2, request3, request4);
+    }
+
+    inline build_permutation(permuted_table: PermutatedTable) -> Permutation {
+        // Collect the 52 cards into two arrays of 26.
+        let new_perm: Permutation = Permutation {
+            perm1: [
+                permuted_table.perm1[0u32].v,
+                permuted_table.perm1[1u32].v,
+                permuted_table.perm1[2u32].v,
+                permuted_table.perm1[3u32].v,
+                permuted_table.perm1[4u32].v,
+                permuted_table.perm1[5u32].v,
+                permuted_table.perm1[6u32].v,
+                permuted_table.perm1[7u32].v,
+                permuted_table.perm1[8u32].v,
+                permuted_table.perm1[9u32].v,
+                permuted_table.perm1[10u32].v,
+                permuted_table.perm1[11u32].v,
+                permuted_table.perm1[12u32].v,
+                permuted_table.perm1[13u32].v,
+                permuted_table.perm1[14u32].v,
+                permuted_table.perm1[15u32].v,
+                permuted_table.perm1[16u32].v,
+                permuted_table.perm1[17u32].v,
+                permuted_table.perm1[18u32].v,
+                permuted_table.perm1[19u32].v,
+                permuted_table.perm1[20u32].v,
+                permuted_table.perm1[21u32].v,
+                permuted_table.perm1[22u32].v,
+                permuted_table.perm1[23u32].v,
+                permuted_table.perm1[24u32].v,
+                permuted_table.perm1[25u32].v,
+            ],
+            perm2: [
+                permuted_table.perm2[0u32].v,
+                permuted_table.perm2[1u32].v,
+                permuted_table.perm2[2u32].v,
+                permuted_table.perm2[3u32].v,
+                permuted_table.perm2[4u32].v,
+                permuted_table.perm2[5u32].v,
+                permuted_table.perm2[6u32].v,
+                permuted_table.perm2[7u32].v,
+                permuted_table.perm2[8u32].v,
+                permuted_table.perm2[9u32].v,
+                permuted_table.perm2[10u32].v,
+                permuted_table.perm2[11u32].v,
+                permuted_table.perm2[12u32].v,
+                permuted_table.perm2[13u32].v,
+                permuted_table.perm2[14u32].v,
+                permuted_table.perm2[15u32].v,
+                permuted_table.perm2[16u32].v,
+                permuted_table.perm2[17u32].v,
+                permuted_table.perm2[18u32].v,
+                permuted_table.perm2[19u32].v,
+                permuted_table.perm2[20u32].v,
+                permuted_table.perm2[21u32].v,
+                permuted_table.perm2[22u32].v,
+                permuted_table.perm2[23u32].v,
+                permuted_table.perm2[24u32].v,
+                permuted_table.perm2[25u32].v,
+            ]
+        };
+        return new_perm;
+    }
+
+    // We can apply ALL players' permutations in one go. The RoomManager collects them
+    // (or the Dealer accumulates them) and composes a single final permutation.
+    // Then we reorder the deck in HouseDealerState.
+    transition dealer_apply_player_shuffles(
+        hs: HouseDealerProposedShuffled, 
+        dealer_perm_table: PermutatedTable,
+        shf1: PlayerProposedShuffle,
+        perm_table1: PermutatedTable,
+        shf2: PlayerProposedShuffle,
+        perm_table2: PermutatedTable,
+        shf3: PlayerProposedShuffle,
+        perm_table3: PermutatedTable,
+        shf4: PlayerProposedShuffle,
+        perm_table4: PermutatedTable,
+        final_perm_deck: Deck // We check that the final deck matches with the final permutation
+    ) -> HouseDealerState {
+        // First validate all inputs are for the same room and game
+        assert(hs.room_id == shf1.room_id);
+        assert(hs.room_id == shf2.room_id);
+        assert(hs.room_id == shf3.room_id);
+        assert(hs.room_id == shf4.room_id);
+
+        // Verify each shuffle corresponds to the correct seat
+        assert(shf1.seat_index == 0u8);
+        assert(shf2.seat_index == 1u8);
+        assert(shf3.seat_index == 2u8);
+        assert(shf4.seat_index == 3u8);
+
+        // Construct random alpha and beta by combining player provided randomness
+        let combined_random: field = 
+            BHP256::hash_to_field(shf1.player_randomness) + 
+            BHP256::hash_to_field(shf2.player_randomness) + 
+            BHP256::hash_to_field(shf3.player_randomness) + 
+            BHP256::hash_to_field(shf4.player_randomness);
+
+        // Hash combined random value to get alpha
+        let random_alpha: field = BHP256::hash_to_field(combined_random);
+        
+        // Hash combined random value + 1 to get beta 
+        let random_beta: field = BHP256::hash_to_field(combined_random + 1field);
+
+        // 1) Compose or combine these four permutations off-chain (if desired),
+        //    or apply them in sequence. This ensures no single entity can fully
+        //    control the final deck order.
+        let shuffle_after_dealer: Permutation = apply_permutation(
+            hs.perm,
+            dealer_perm_table,
+            random_alpha,
+            random_beta
+        );
+
+        let shuffle_after_player1: Permutation = apply_permutation(
+            shuffle_after_dealer,
+            perm_table1,
+            random_alpha,
+            random_beta
+        );
+
+        let shuffle_after_player2: Permutation = apply_permutation(
+            shuffle_after_player1,
+            perm_table2,
+            random_alpha,
+            random_beta
+        );
+
+        let shuffle_after_player3: Permutation = apply_permutation(
+            shuffle_after_player2,
+            perm_table3,
+            random_alpha,
+            random_beta
+        );
+
+        let shuffle_after_player4: Permutation = apply_permutation(
+            shuffle_after_player3,
+            perm_table4,
+            random_alpha,
+            random_beta
+        );
+
+        assert(check_deck_matches_final_perm(final_perm_deck, shuffle_after_player4));
+
+        // Ensure the final deck matches with the final permutation
+
+        // 3) Return the updated HouseDealerState.
         return HouseDealerState {
-            owner: house_dealer_state.owner,
-            deck: new_deck,
+            owner: self.caller,
+            deck: final_perm_deck,
             next_card_index: 0u8
         };
     }
 
-    inline grand_product_permutation_check(
-        perm1: [u8; 26],
-        perm2: [u8; 26],
-        sorted_perm1: [KeyValue; 26],
-        sorted_perm2: [KeyValue; 26]
+
+    inline check_deck_matches_final_perm(
+        final_perm_deck: Deck,
+        final_perm: Permutation
     ) -> bool {
-        let product: u64 = 1u64;
-        let product_sorted: u64 = 1u64;
+        // Check that the final deck matches with the final permutation
+        for i: u8 in 0u8..26u8 {
+            assert(final_perm_deck.cards1[i].index == final_perm.perm1[i]);
+            assert(final_perm_deck.cards2[i].index == final_perm.perm2[i]);
+        }
+        return true;
+    }
+
+    inline grand_product_permutation_check(
+        random_alpha: field,
+        random_beta: field,
+        perm: Permutation,
+        rearranged_perm: PermutatedTable
+    ) -> bool {
+        let product: field = 1field;
+        let product_sorted: field = 1field;
 
         // First half (0..26).
         for i: u8 in 0u8..26u8 {
-            product *= ((perm1[i] as u64) + (i as u64)*1u64 + 1u64);
-            product_sorted *= ((sorted_perm1[i].v.index as u64) + (i as u64)*1u64 + 1u64);
+            product *= ((perm.perm1[i] as field) + (i as field)*random_alpha + random_beta);
+            product_sorted *= ((rearranged_perm.perm1[i].v as field) + (i as field)*random_alpha + random_beta);
         }
 
         // Second half (26..52).
         for i: u8 in 0u8..26u8 {
-            let j: u64 = (i as u64) + 26u64;
-            product *= ((perm2[i] as u64) + j*1u64 + 1u64);
-            product_sorted *= ((sorted_perm2[i].v.index as u64) + j*1u64 + 1u64);
+            let j: field = (i as field) + 26field;
+            product *= ((perm.perm2[i] as field) + j*random_alpha + random_beta);
+            product_sorted *= ((rearranged_perm.perm2[i].v as field) + j*random_alpha + random_beta);
         }
 
         return product == product_sorted;
     }
 
     function verify_permutation(
-        perm1: [u8; 26],
-        perm2: [u8; 26]
+        perm: Permutation
     ) -> bool {
         let bitset: u64 = 0u64;
         for i: u8 in 0u8..26u8 {
-            bitset |= 1u64 << perm1[i];
-            bitset |= 1u64 << perm2[i];
+            bitset |= 1u64 << perm.perm1[i];
+            bitset |= 1u64 << perm.perm2[i];
         }
         return bitset == 0u64;
     }
@@ -173,13 +339,16 @@ program zkpoker.aleo {
         room_id: u32,
         seat_index: u8,
         seat_owner: address,
+        dealer_nonce: u64,
         perm1: [u8; 26],
-        perm2: [u8; 26]
+        perm2: [u8; 26],
+        player_randomness: scalar // players are incentivized to provide randomness for the permutation check
     }
 
     record HouseDealerCreateDeckRequest {
         owner: address,
-        room_id: u32
+        room_id: u32,
+        player_addresses: [address; 4]
     }
 
     // These actions fulfill requests that the game state manager requires to move 
@@ -385,6 +554,12 @@ program zkpoker.aleo {
         let deck_request: HouseDealerCreateDeckRequest = HouseDealerCreateDeckRequest {
             room_id: room_id,
             owner: dealer_address,
+            player_addresses: [
+                room_config.joined_users[0u8].player_address,
+                room_config.joined_users[1u8].player_address,
+                room_config.joined_users[2u8].player_address,
+                room_config.joined_users[3u8].player_address
+            ]
         };
 
         let room_config_request: RoomConfigRequest = RoomConfigRequest {
