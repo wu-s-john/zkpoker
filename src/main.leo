@@ -4,7 +4,8 @@ program zkpoker.aleo {
     // HouseDealer Functions and Transitions
     // -----------------------------------
     struct Card {
-        val: u32,
+        rank: u8,
+        suit: u8,
         index: u8
     }
 
@@ -51,6 +52,12 @@ program zkpoker.aleo {
         cards: [Card; 3],
         room_id: u32,
         is_next_phase_turn: bool
+    }
+
+    record CommunityCards {
+        owner: address,
+        cards: [Card; 5],
+        room_id: u32
     }
 
     struct KeyValue {
@@ -490,7 +497,9 @@ program zkpoker.aleo {
     // A simple struct for a player's public data 
     // (fields visible to everyone in the network).
     struct Player {
+        player_address: address,
         stack: u64,      // The player's chip stack (public)
+        contributed: u64, // The player's contribution to the pot
         folded: bool,    // Whether the player has folded
         all_in: bool     // Whether the player is all-in
     }
@@ -511,16 +520,38 @@ program zkpoker.aleo {
         player_addresses: [address; 4]
     }
 
+    // The GameStateManager will request actions from the players. 
+    record PlayerActionRequest {
+        owner: address,
+        seat_index: u8,
+        room_id: u32,
+        nonce: u64,                 // identifies the current request, matching GameState.nonce
+        stack: u64,
+        contributed: u64,
+        highest_bet: u64,
+        main_pot: u64
+    }
+
     // These actions fulfill requests that the game state manager requires to move 
     // the game forward.
     record PlayerActionResponse {
         owner: address,
         seat_index: u8,
         room_id: u32,
+        stack: u64,
+        nonce: u64,
+        contributed: u64,
         // 0 = Fold, 1 = Call, 2 = Raise, 3 = All-In
         action_type: u8,
         // Use this amount for raise or all-in actions; can be 0 for fold or call
         amount: u64
+    }
+
+    record PlayerFinalHandRequest {
+        owner: address,
+        room_id: u32,
+        seat_index: u8,
+        did_fold: bool
     }
 
     // Private hole cards belong in a record:
@@ -534,6 +565,15 @@ program zkpoker.aleo {
         owner: address,        // The address owning this final hand
         did_fold: bool,        // Whether the player folded
         final_score: u32,      // The numerical score of the hand (private or revealed)
+        // The final_score is computed as a single 32-bit value that encodes both the hand category and card ranks
+        // Format: (category << 24) + (c1 << 20) + (c2 << 16) + (c3 << 12) + (c4 << 8) + (c5 << 4)
+        // Where:
+        // - category is the hand type (1-10):
+        //   1 = High Card, 2 = Pair, 3 = Two Pair, 4 = Three of Kind, 5 = Straight,
+        //   6 = Flush, 7 = Full House, 8 = Four of Kind, 9 = Straight Flush, 10 = Royal Flush
+        // - c1..c5 are the relevant card ranks (2-14) in descending order based on hand type
+        // - Each rank uses 4 bits since max rank is 14 (Ace)
+        // This encoding ensures proper ordering when comparing hands as single integers
         player_hand: [Card; 2] // The player's hole cards (private)
     }
 
@@ -567,40 +607,342 @@ program zkpoker.aleo {
     // The main GameState struct holds publicly visible information.
     record GameState {
         owner: address,
-        players: [Player; 4],
         num_players: u8,
         house_dealer_actor: address,
-        room_id: u32,
-        nonce: u64, // used to track valid state transitions
+
+
+        // Static Per Match
         small_blind_seat: u8,
         big_blind_seat: u8,
         small_blind: u64,
         big_blind: u64,
-        
+        room_id: u32,
+
+        // Changes Per Round
         current_phase: u8,              // 0=PRE_FLOP, 1=FLOP, etc.
         community_cards: [Card; 5],     // Indices 0-2 for flop, 3 for turn, 4 for river
-        contributed: [u64; 4],          // Amount each seat has contributed
+
+        // Changing Per Player's decision
+        players: [Player; 4],
+        nonce: u64, // used to track valid state transitions   
         highest_bet: u64,
         main_pot: u64,
-        current_turn_index: u8,
-        has_acted_this_round: [bool; 4],
+        active_player_turn_index: u8,
+        has_acted_this_round: u8, // A bitmask of which players have acted this round
     }
 
-    // The GameStateManager will request actions from the players. 
-    record PlayerActionRequest {
-        owner: address,
-        seat_index: u8,
-        room_id: u32,
-        nonce: u64,                 // identifies the current request, matching GameState.nonce
-        stack: u64,
-        highest_bet: u64,
-        main_pot: u64
-    }
 
     struct PlayerRoomConfig {
         player_address: address,
         bet: u64
     }
+
+    transition player_submit_action(
+        request: PlayerActionRequest,
+        action_type: u8,
+        amount: u64
+    ) -> PlayerActionResponse {
+
+        // Use if-else statements to handle the action_type.
+        if action_type == 0u8 {
+            // Fold
+            // Typically, a fold has amount = 0
+            assert(amount == 0u64);
+        } else if action_type == 1u8 {
+            // Call
+            // The "amount" for call should be the difference between the highest bet and the contributed amount.
+            let call_amount: u64 = request.highest_bet - request.contributed;
+            assert(amount == call_amount && amount <= request.stack);
+        } else if action_type == 2u8 {
+            // Raise
+            // For a raise, "amount" is the total bet the player wants to make, which should be greater than the highest bet.
+            assert(amount + request.contributed > request.highest_bet && amount <= request.stack);
+        } else if action_type == 3u8 {
+            // All-In
+            // The player puts all chips into the pot. "amount" should be <= stack.
+            assert(0u64 < amount && amount == request.stack);
+        } else {
+            // Invalid action_type
+            assert(false);
+        }
+        // Build and return the validated player action record.
+        return PlayerActionResponse {
+            owner: self.caller,
+            nonce: request.nonce,
+            seat_index: request.seat_index,
+            room_id: request.room_id,
+            stack: request.stack - amount,
+            contributed: request.contributed + amount,
+            action_type,
+            amount
+        };
+    }
+
+    // They manage who will be the next player to act
+    transition gsm_process_action_next_betting(
+        gs: GameState, 
+        action: PlayerActionResponse
+    ) -> (GameState, PlayerActionRequest) {
+        // 1) Basic checks
+        //   - The room id and seat index must be valid
+        //   - The nonce must match the game state's nonce
+        //   - We need to make sure if there will be a betting phase afterwards。 Otherwise, abort.
+        assert(gs.room_id == action.room_id);
+        assert(action.seat_index < gs.num_players);
+        assert(gs.nonce == action.nonce);
+        let next_nonce: u64 = gs.nonce + 1u64;
+
+        // 2) Check that we are still in the betting phase after the user's contribution
+        let next_active_player_turn_index: u8 = get_next_player_turn_index(gs.has_acted_this_round, action.seat_index, action.action_type);
+        assert(next_active_player_turn_index < 4u8); // The only legal values are 0-3. Otherwise, if it's not in those values, then we are not in the betting phase
+        let next_has_acted_this_round: u8 = gs.has_acted_this_round;
+        next_has_acted_this_round |= 1u8 << action.seat_index;
+
+        // 3) Updated Players
+        let next_players: [Player; 4] = update_players(gs.players, action.action_type, action.seat_index, action.amount, action.stack, action.contributed);
+
+        // 4) Update main pot and highest bet
+        let next_main_pot: u64 = gs.main_pot + action.amount;
+        let next_highest_bet: u64 = max_u64(gs.highest_bet, action.amount + action.stack);
+
+        let next_player: Player = next_active_player_turn_index == 0u8 ? gs.players[0u8] :
+            (next_active_player_turn_index == 1u8 ? gs.players[1u8] :
+            (next_active_player_turn_index == 2u8 ? gs.players[2u8] :
+            gs.players[3u8]));
+
+
+        let new_state: GameState = GameState {
+            owner: gs.owner,
+            num_players: gs.num_players,
+            house_dealer_actor: gs.house_dealer_actor,
+            small_blind_seat: gs.small_blind_seat,
+            big_blind_seat: gs.big_blind_seat,
+            small_blind: gs.small_blind,
+            big_blind: gs.big_blind,
+            room_id: gs.room_id,
+            current_phase: gs.current_phase,
+            community_cards: gs.community_cards,
+            players: next_players,
+            nonce: next_nonce,
+            highest_bet: next_highest_bet,
+            main_pot: next_main_pot,
+            active_player_turn_index: next_active_player_turn_index,
+            has_acted_this_round: next_has_acted_this_round
+        };
+
+        let next_request: PlayerActionRequest = PlayerActionRequest {
+            owner: next_player.player_address,
+            seat_index: next_active_player_turn_index,
+            room_id: gs.room_id,
+            nonce: next_nonce,
+            stack: next_player.stack,
+            contributed: next_player.contributed,
+            highest_bet: next_highest_bet,
+            main_pot: next_main_pot
+        };
+
+        return (new_state, next_request);
+    }
+
+    inline get_next_player_turn_index(
+        has_acted_mask: u8,
+        current_seat_index: u8,
+        action_type: u8
+    ) -> u8 {
+        // A simple example that loops around up to 4 seats, returning the first seat that hasn't acted.
+        // If none is found, return 4u8 (which can be handled to indicate betting is complete).
+        let candidate_seat: u8 = (current_seat_index + 1u8) % 4u8;
+
+        for i: u8 in 0u8..4u8 {
+            // TODO: see if if statements are updated
+
+            // Check if this seat has already acted in this round (bit test).
+            let mask_bit: u8 = (has_acted_mask >> candidate_seat) & 1u8;
+
+            // For demonstration, if the candidate seat hasn't acted (mask_bit == 0u8)
+            // we return it. You could add additional checks (folded/all-in) if you track them.
+            if mask_bit == 0u8 {
+                return candidate_seat;
+            }
+
+            // Otherwise, move to the next seat.
+            candidate_seat = (candidate_seat + 1u8) % 4u8;
+        }
+
+        // If all seats have acted, return a sentinel (4u8).
+        return 4u8;
+    }
+
+    inline update_players(
+        players: [Player; 4],
+        action_type: u8,
+        seat_index: u8,
+        amount: u64,
+        new_stack: u64,
+        new_contributed: u64
+    ) -> [Player; 4] {
+        return [
+            seat_index == 0u8 ? update_player(players[0u8], action_type, amount, new_stack, new_contributed) : players[0u8],
+            seat_index == 1u8 ? update_player(players[1u8], action_type, amount, new_stack, new_contributed) : players[1u8],
+            seat_index == 2u8 ? update_player(players[2u8], action_type, amount, new_stack, new_contributed) : players[2u8],
+            seat_index == 3u8 ? update_player(players[3u8], action_type, amount, new_stack, new_contributed) : players[3u8]
+        ];
+    }
+
+    inline update_player(
+        player: Player,
+        action_type: u8,
+        amount: u64,
+        new_stack: u64,
+        new_contributed: u64
+    ) -> Player {
+        let is_all_in: bool = action_type == 3u8;
+        let is_folded: bool = action_type == 0u8;
+        
+        // Optional sanity check:
+        // Uncomment the line below to ensure that the updated total contribution matches the expected sum.
+        // assert(new_contributed == player.contributed + amount);
+        
+        return Player {
+            player_address: player.player_address,
+            stack: new_stack,
+            contributed: new_contributed,
+            folded: is_folded,
+            all_in: is_all_in
+        };
+    }
+
+
+    inline max_u64(a: u64, b: u64) -> u64 {
+        if a >= b {
+            return a;
+        } else {
+            return b;
+        }
+    }
+
+    // We need an individual player to show their winning hand 
+    // This transition will have a player choose their winning hand and they will demonstrate who will will win
+    // Sine the hand is sorted, we can easily verify the hand corresponds to a certain combo
+    transition player_show_winning_hand(
+        player_final_hand_request: PlayerFinalHandRequest,
+        player_hand: [Card; 2],
+        community_hand: [Card; 5],
+        sorted_hand: [Card; 7],
+        combo_indicator: u8
+    ) -> FinalHand {
+        if player_final_hand_request.did_fold {
+            return FinalHand {
+                owner: player_final_hand_request.owner,
+                did_fold: true,
+                final_score: 0u32,
+                player_hand: player_hand
+            };
+        }
+
+        // Verify that the sorted_hand corresponds to the combo_indicator
+        assert(combo_indicator <= 9u8);
+
+        if combo_indicator == 9u8 {
+            // Royal Flush
+            assert(sorted_hand[0u8].rank == 14u8);
+            assert(sorted_hand[1u8].rank == 13u8);
+            assert(sorted_hand[2u8].rank == 12u8);
+            assert(sorted_hand[3u8].rank == 11u8);
+            assert(sorted_hand[4u8].rank == 10u8);
+        } else if combo_indicator == 8u8 {
+            // Straight Flush
+            let initial_value: u8 = sorted_hand[0u8].rank;
+            assert(
+                initial_value + 1u8 == sorted_hand[1u8].rank ||
+                initial_value + 2u8 == sorted_hand[1u8].rank ||
+                initial_value + 3u8 == sorted_hand[1u8].rank ||
+                initial_value + 4u8 == sorted_hand[1u8].rank
+            );
+        } else if combo_indicator == 7u8 {
+            // Four of a Kind
+            let rank_of_four: u8 = sorted_hand[0u8].rank;
+            assert(rank_of_four == sorted_hand[1u8].rank);
+            assert(rank_of_four == sorted_hand[2u8].rank);
+            assert(rank_of_four == sorted_hand[3u8].rank);
+            assert(rank_of_four == sorted_hand[4u8].rank);
+        } else if combo_indicator == 6u8 {
+            // Full House
+            let rank_of_three: u8 = sorted_hand[0u8].rank;
+            let rank_of_two: u8 = sorted_hand[1u8].rank;
+            assert(rank_of_three == sorted_hand[1u8].rank);
+            assert(rank_of_three == sorted_hand[2u8].rank);
+            assert(rank_of_two == sorted_hand[3u8].rank);
+            assert(rank_of_two == sorted_hand[4u8].rank);
+        } else if combo_indicator == 5u8 {
+            // Flush
+            let suit: u8 = sorted_hand[0u8].suit;
+            assert(sorted_hand[1u8].suit == suit);
+            assert(sorted_hand[2u8].suit == suit);
+            assert(sorted_hand[3u8].suit == suit);
+            assert(sorted_hand[4u8].suit == suit);
+        } else if combo_indicator == 4u8 {
+            // Straight
+            let initial_value: u8 = sorted_hand[0u8].rank;
+            assert(sorted_hand[1u8].rank == initial_value - 1u8);
+            assert(sorted_hand[2u8].rank == initial_value - 2u8);
+            assert(sorted_hand[3u8].rank == initial_value - 3u8);
+            assert(sorted_hand[4u8].rank == initial_value - 4u8);
+        } else if combo_indicator == 3u8 {
+            // Three of a Kind
+            let rank_of_three: u8 = sorted_hand[0u8].rank;
+            assert(sorted_hand[1u8].rank == rank_of_three);
+            assert(sorted_hand[2u8].rank == rank_of_three);
+        } else if combo_indicator == 2u8 {
+            // Two Pair
+            let first_pair: u8 = sorted_hand[0u8].rank;
+            let second_pair: u8 = sorted_hand[2u8].rank;
+            assert(sorted_hand[1u8].rank == first_pair);
+            assert(sorted_hand[3u8].rank == second_pair);
+        } else if combo_indicator == 1u8 {
+            // One Pair
+            let pair_rank: u8 = sorted_hand[0u8].rank;
+            assert(sorted_hand[1u8].rank == pair_rank);
+        }
+
+        let c1: u8 = sorted_hand[0u8].rank;
+        let c2: u8 = sorted_hand[1u8].rank;
+        let c3: u8 = sorted_hand[2u8].rank;
+        let c4: u8 = sorted_hand[3u8].rank;
+        let c5: u8 = sorted_hand[4u8].rank;
+
+        let final_score: u32 = ((combo_indicator as u32) << 20u32)
+            + ((c1 as u32) << 16u32)
+            + ((c2 as u32) << 12u32)
+            + ((c3 as u32) << 8u32)
+            + ((c4 as u32) << 4u32)
+            + ((c5 as u32) << 0u32);
+
+        return FinalHand {
+            owner: self.caller,
+            did_fold: false,
+            final_score: final_score,
+            player_hand: player_hand
+        };
+    }
+
+    // 5. Determine winner after getting all the final hands to all the players
+    // transition gsm_determine_winner(
+    //     final_hand1: FinalHand, 
+    //     final_hand2: FinalHand, 
+    //     final_hand3: FinalHand, 
+    //     final_hand4: FinalHand,
+    //     ) -> u8 {
+    //     // First we need to check that the final hands are sorted
+    //     assert(final_hand1.score >= final_hand2.score);
+    //     assert(final_hand2.score >= final_hand3.score);
+    //     assert(final_hand3.score >= final_hand4.score);
+
+    //     // Evaluate final_submissions off-chain or in a circuit, then update
+    //     // gs.final_player_scores or declare winners. 
+    //     return 0u8;
+    // }
+
 
     // RoomConfig holds the entire poker game configuration:
     // This is public so anyone can join the game based on the configuration
