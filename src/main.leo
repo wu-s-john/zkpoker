@@ -705,10 +705,7 @@ program zkpoker.aleo {
         let next_main_pot: u64 = gs.main_pot + action.amount;
         let next_highest_bet: u64 = max_u64(gs.highest_bet, action.amount + action.stack);
 
-        let next_player: Player = next_active_player_turn_index == 0u8 ? gs.players[0u8] :
-            (next_active_player_turn_index == 1u8 ? gs.players[1u8] :
-            (next_active_player_turn_index == 2u8 ? gs.players[2u8] :
-            gs.players[3u8]));
+        let next_player: Player = select_player(gs.players, next_active_player_turn_index);
 
 
         let new_state: GameState = GameState {
@@ -742,6 +739,18 @@ program zkpoker.aleo {
         };
 
         return (new_state, next_request);
+    }
+
+    inline select_player(players: [Player; 4], seat_index: u8) -> Player {
+        if seat_index == 0u8 {
+            return players[0u8];
+        } else if seat_index == 1u8 {
+            return players[1u8];
+        } else if seat_index == 2u8 {
+            return players[2u8];
+        } else {
+            return players[3u8];
+        }
     }
 
     inline get_next_player_turn_index(
@@ -820,6 +829,97 @@ program zkpoker.aleo {
             return b;
         }
     }
+
+    transition gsm_advance_phase_flop(
+        gs: GameState, 
+        dealt_cards: DealtThreeCommunityCards, 
+        last_player_action: PlayerActionResponse
+    ) -> (GameState, PlayerActionRequest) {
+
+        // -------------------------------------------------------------------------
+        // 1. Ensure we are still in the PRE_FLOP phase (assume 0u8 == PRE_FLOP)
+        // -------------------------------------------------------------------------
+        assert(gs.current_phase == 0u8);
+
+        // -------------------------------------------------------------------------
+        // 2. Ensure all players have already betted. For instance, if your 
+        //    'get_next_player' helper returns 4 when no seats need to bet, 
+        //    we check that here.
+        // -------------------------------------------------------------------------
+        let next_player_index: u8 = get_next_player_turn_index(gs.has_acted_this_round, last_player_action.seat_index, last_player_action.action_type);
+        assert(next_player_index == 4u8);
+
+        // -------------------------------------------------------------------------
+        // 3. Reveal the FLOP by populating community_cards indices [0..2]
+        // -------------------------------------------------------------------------
+        let updated_community_cards: [Card; 5] = [
+            dealt_cards.cards[0u8],
+            dealt_cards.cards[1u8],
+            dealt_cards.cards[2u8],
+            gs.community_cards[3u8],
+            gs.community_cards[4u8]
+        ];
+
+        // Move from PRE-FLOP (0) to FLOP (1).
+        
+
+        // -------------------------------------------------------------------------
+        // 4. Bump the nonce (general safeguard for state transitions)
+        // -------------------------------------------------------------------------
+        let new_nonce: u64 = gs.nonce + 1u64;
+
+        // -------------------------------------------------------------------------
+        // 5. Create a new PlayerActionRequest for the next betting round
+        //    (You can customize seat selection logic below as needed)
+        // -------------------------------------------------------------------------
+
+        // Determine the next active player after the big blind seat
+        let next_potential_seats: [u8; 4] = [
+            gs.big_blind_seat, 
+            (gs.big_blind_seat + 1u8) % gs.num_players, 
+            (gs.big_blind_seat + 2u8) % gs.num_players, 
+            (gs.big_blind_seat + 3u8) % gs.num_players
+        ];
+
+        let next_seat: u8 = 0u8; // TODO: FIX. Also handle the case where the next seats are all folded or all in
+
+        let new_gs: GameState = GameState {
+            owner: gs.owner,
+            num_players: gs.num_players,
+            house_dealer_actor: gs.house_dealer_actor,
+            small_blind_seat: gs.small_blind_seat,
+            big_blind_seat: gs.big_blind_seat,
+            small_blind: gs.small_blind,
+            big_blind: gs.big_blind,
+            room_id: gs.room_id,
+
+            current_phase: 1u8,
+            community_cards: updated_community_cards,
+            players: gs.players,
+            nonce: new_nonce,
+            highest_bet: gs.highest_bet,
+            main_pot: gs.main_pot,
+            active_player_turn_index: next_seat,
+            has_acted_this_round: 0u8
+        };
+
+        let next_player: Player = select_player(new_gs.players, next_seat);
+
+        let action_request: PlayerActionRequest = PlayerActionRequest {
+            owner: next_player.player_address,
+            seat_index: next_seat,
+            room_id: new_gs.room_id,
+            nonce: new_nonce,
+            stack: next_player.stack,
+            contributed: next_player.contributed,
+            highest_bet: new_gs.highest_bet,
+            main_pot: new_gs.main_pot
+        };
+
+        // Return the updated game state and the new action request
+        return (new_gs, action_request);
+    }
+
 
     // We need an individual player to show their winning hand 
     // This transition will have a player choose their winning hand and they will demonstrate who will will win
