@@ -14,12 +14,16 @@ program zkpoker.aleo {
         cards2: [Card; 26],
     }
 
-    record HouseDealerState {
-        owner: address,
+    struct HouseDealerState {
         room_id: u32,
         deck: Deck,            // The shuffled deck of 52 cards (public here)
         next_card_index: u8,   // The pointer to the next card to deal (public)
         player_addresses: [address; 4] // The addresses of the players in the game
+    }
+
+    record HouseDealerStateRecord {
+        owner: address,
+        state: HouseDealerState
     }
 
     struct Permutation {
@@ -196,8 +200,14 @@ program zkpoker.aleo {
     // We can apply ALL players' permutations in one go. The RoomManager collects them
     // (or the Dealer accumulates them) and composes a single final permutation.
     // Then we reorder the deck in HouseDealerState.
-    transition dealer_apply_player_shuffles(
-        hs: HouseDealerProposedShuffled, 
+
+    inline null_community_cards() -> [Card; 5] {
+        let null_card: Card = Card { rank: 13u8, suit: 13u8, index: 52u8 };
+        return [null_card, null_card, null_card, null_card, null_card];
+    }
+
+    transition house_dealer_starts_game(
+        hs: HouseDealerProposedShuffled,
         dealer_perm_table: PermutatedTable,
         shf1: PlayerProposedShuffle,
         perm_table1: PermutatedTable,
@@ -207,8 +217,18 @@ program zkpoker.aleo {
         perm_table3: PermutatedTable,
         shf4: PlayerProposedShuffle,
         perm_table4: PermutatedTable,
-        final_perm_deck: Deck // We check that the final deck matches with the final permutation
-    ) -> HouseDealerState {
+        final_perm_deck: Deck,
+        room_config: RoomConfig
+    ) -> (
+        GameState, 
+        HouseDealerStateRecord, 
+        PlayerHand, 
+        PlayerHand, 
+        PlayerHand, 
+        PlayerHand,
+        PlayerActionRequest
+    ) {
+        // 1) Apply all permutations to produce the final HouseDealerState.
         // First validate all inputs are for the same room and game
         assert(hs.room_id == shf1.room_id);
         assert(hs.room_id == shf2.room_id);
@@ -274,11 +294,7 @@ program zkpoker.aleo {
 
         assert(check_deck_matches_final_perm(final_perm_deck, shuffle_after_player4));
 
-        // Ensure the final deck matches with the final permutation
-
-        // 3) Return the updated HouseDealerState.
-        return HouseDealerState {
-            owner: self.caller,
+        let final_dealer_state: HouseDealerState = HouseDealerState {
             room_id: hs.room_id,
             deck: final_perm_deck,
             next_card_index: 0u8,
@@ -289,9 +305,8 @@ program zkpoker.aleo {
                 shf4.seat_owner
             ]
         };
-    }
 
-    transition house_dealer_create_game_state(room_config: RoomConfig) -> GameState {
+        // 2) Create the new GameState record from the room config.
         // Initialize an array of Players with default values
         let initial_players: [Player; 4] = [
             Player { player_address: room_config.joined_users[0u8].player_address, stack: room_config.joined_users[0u8].bet, contributed: 0u64, folded: false, all_in: false },
@@ -301,7 +316,7 @@ program zkpoker.aleo {
         ];
 
         // Construct and return the new GameState record
-        return GameState {
+        let game_state: GameState = GameState {
             owner: room_config.game_state_manager_address,
             players: initial_players,
             num_players: room_config.num_joined_users,
@@ -320,23 +335,11 @@ program zkpoker.aleo {
             has_acted_this_round: 0u8,
             active_player_turn_index: (room_config.big_blind_seat + 1u8) % room_config.num_joined_users
         };
-    }
 
-    inline null_community_cards() -> [Card; 5] {
-        let null_card: Card = Card { rank: 13u8, suit: 13u8, index: 52u8 };
-        return [null_card, null_card, null_card, null_card, null_card];
-    }
+        // 3) Deal two hole cards to each player, returning an updated HouseDealerState plus 4 PlayerHands.
+        let deck: Deck = final_dealer_state.deck;
 
-
-    transition house_dealer_deal_player_cards(
-        hs: HouseDealerState
-    ) -> (HouseDealerState, PlayerHand, PlayerHand, PlayerHand, PlayerHand) {
-
-        // Copy the current deck and the index pointing to the next card
-        let deck: Deck = hs.deck;
-        let start_index: u8 = hs.next_card_index;
-
-        // Extract two cards for each of the 4 seats
+        // For example, dealing from deck.cards1
         let card0_1: Card = deck.cards1[0u8];
         let card0_2: Card = deck.cards1[1u8];
         let card1_1: Card = deck.cards1[2u8];
@@ -348,38 +351,58 @@ program zkpoker.aleo {
 
         // Update the dealer state to point to the next card
         let new_dealer_state: HouseDealerState = HouseDealerState {
-            owner: self.caller,
             deck: deck,
-            room_id: hs.room_id,
+            room_id: final_dealer_state.room_id,
             next_card_index: 8u8,
-            player_addresses: hs.player_addresses
+            player_addresses: final_dealer_state.player_addresses
         };
 
-        // Create player hand records (sample placeholders for 'owner')
         let p0_hand: PlayerHand = PlayerHand {
-            owner: hs.player_addresses[0u8], 
+            owner: final_dealer_state.player_addresses[0u8],
             hole_cards: [card0_1, card0_2]
         };
         let p1_hand: PlayerHand = PlayerHand {
-            owner: hs.player_addresses[1u8], 
+            owner: final_dealer_state.player_addresses[1u8],
             hole_cards: [card1_1, card1_2]
         };
         let p2_hand: PlayerHand = PlayerHand {
-            owner: hs.player_addresses[2u8], 
+            owner: final_dealer_state.player_addresses[2u8],
             hole_cards: [card2_1, card2_2]
         };
         let p3_hand: PlayerHand = PlayerHand {
-            owner: hs.player_addresses[3u8], 
+            owner: final_dealer_state.player_addresses[3u8],
             hole_cards: [card3_1, card3_2]
         };
 
-        // Return the updated HouseDealerState as well as each player's new hand
+        // Create a PlayerActionRequest for the seat that is about to act first (after blinds).
+        let next_seat: u8 = game_state.active_player_turn_index;
+        let next_player: Player = select_player(game_state.players, next_seat);
+        
+        let first_request: PlayerActionRequest = PlayerActionRequest {
+            owner: next_player.player_address,
+            seat_index: next_seat,
+            room_id: game_state.room_id,
+            nonce: game_state.nonce,
+            stack: next_player.stack,
+            contributed: next_player.contributed,
+            highest_bet: game_state.highest_bet,
+            main_pot: game_state.main_pot
+        };
+
+        let dealer_state_record: HouseDealerStateRecord = HouseDealerStateRecord {
+            owner: self.caller,
+            state: new_dealer_state
+        };
+
+        // Return everything needed to continue: the new GameState, dealer state, each player's hole cards, and the initial PlayerActionRequest.
         return (
-            new_dealer_state,
+            game_state,
+            dealer_state_record,
             p0_hand,
             p1_hand,
             p2_hand,
-            p3_hand
+            p3_hand,
+            first_request
         );
     }
 
@@ -398,7 +421,6 @@ program zkpoker.aleo {
 
         // Update the dealer state to point to the next card
         let new_dealer_state: HouseDealerState = HouseDealerState {
-            owner: self.caller,
             room_id: hs.room_id,
             deck: deck,
             next_card_index: 12u8,
@@ -430,7 +452,6 @@ program zkpoker.aleo {
 
         // Update the dealer state, advancing past the burn card and the dealt card
         let new_dealer_state: HouseDealerState = HouseDealerState {
-            owner: self.caller,
             room_id: hs.room_id,
             deck: deck,
             next_card_index: 14u8,
@@ -461,7 +482,6 @@ program zkpoker.aleo {
 
         // Update the dealer state, advancing to index 16
         let new_dealer_state: HouseDealerState = HouseDealerState {
-            owner: self.caller,
             room_id: hs.room_id,
             deck: deck,
             next_card_index: 16u8,
@@ -1142,15 +1162,14 @@ program zkpoker.aleo {
             assert(rank_of_four == sorted_hand[1u8].rank);
             assert(rank_of_four == sorted_hand[2u8].rank);
             assert(rank_of_four == sorted_hand[3u8].rank);
-            assert(rank_of_four == sorted_hand[4u8].rank);
         } else if combo_indicator == 6u8 {
             // Full House
-            let rank_of_three: u8 = sorted_hand[0u8].rank;
-            let rank_of_two: u8 = sorted_hand[1u8].rank;
-            assert(rank_of_three == sorted_hand[1u8].rank);
-            assert(rank_of_three == sorted_hand[2u8].rank);
-            assert(rank_of_two == sorted_hand[3u8].rank);
-            assert(rank_of_two == sorted_hand[4u8].rank);
+            // Verified that the first 3 cards are the same rank
+            assert(sorted_hand[0u8].rank == sorted_hand[1u8].rank);
+            assert(sorted_hand[0u8].rank == sorted_hand[2u8].rank);
+
+            // Verified that the last 2 cards are the same rank
+            assert(sorted_hand[3u8].rank == sorted_hand[4u8].rank);
         } else if combo_indicator == 5u8 {
             // Flush
             let suit: u8 = sorted_hand[0u8].suit;
