@@ -563,6 +563,7 @@ program zkpoker.aleo {
     // A record to store a player's final hand and score at showdown
     record FinalHand {
         owner: address,        // The address owning this final hand
+        seat_index: u8,
         did_fold: bool,        // Whether the player folded
         final_score: u32,      // The numerical score of the hand (private or revealed)
         // The final_score is computed as a single 32-bit value that encodes both the hand category and card ranks
@@ -612,8 +613,9 @@ program zkpoker.aleo {
 
 
         // Static Per Match
-        small_blind_seat: u8,
-        big_blind_seat: u8,
+        dealer_seat: u8, // It is the seat of a player
+        small_blind_seat: u8, // dealer_seat + 1
+        big_blind_seat: u8, // dealer_seat + 2
         small_blind: u64,
         big_blind: u64,
         room_id: u32,
@@ -712,6 +714,7 @@ program zkpoker.aleo {
             owner: gs.owner,
             num_players: gs.num_players,
             house_dealer_actor: gs.house_dealer_actor,
+            dealer_seat: gs.dealer_seat,
             small_blind_seat: gs.small_blind_seat,
             big_blind_seat: gs.big_blind_seat,
             small_blind: gs.small_blind,
@@ -868,6 +871,7 @@ program zkpoker.aleo {
         // -------------------------------------------------------------------------
         let new_nonce: u64 = gs.nonce + 1u64;
 
+
         // -------------------------------------------------------------------------
         // 5. Create a new PlayerActionRequest for the next betting round
         //    (You can customize seat selection logic below as needed)
@@ -880,13 +884,20 @@ program zkpoker.aleo {
             (gs.big_blind_seat + 2u8) % gs.num_players, 
             (gs.big_blind_seat + 3u8) % gs.num_players
         ];
+        let active_players_mask: u8 = 0u8;
+        for i: u8 in 0u8..4u8 {
+            if next_potential_seats[i] != 0u8 {
+                active_players_mask |= 1u8 << next_potential_seats[i];
+            }
+        }
 
-        let next_seat: u8 = 0u8; // TODO: FIX. Also handle the case where the next seats are all folded or all in
+        let next_seat: u8 = find_next_active_player(active_players_mask, gs.dealer_seat); // TODO: FIX. Also handle the case where the next seats are all folded or all in
 
         let new_gs: GameState = GameState {
             owner: gs.owner,
             num_players: gs.num_players,
             house_dealer_actor: gs.house_dealer_actor,
+            dealer_seat: gs.dealer_seat,
             small_blind_seat: gs.small_blind_seat,
             big_blind_seat: gs.big_blind_seat,
             small_blind: gs.small_blind,
@@ -900,7 +911,106 @@ program zkpoker.aleo {
             highest_bet: gs.highest_bet,
             main_pot: gs.main_pot,
             active_player_turn_index: next_seat,
-            has_acted_this_round: 0u8
+            has_acted_this_round: 15u8 - active_players_mask
+        };
+
+        let next_player: Player = select_player(new_gs.players, next_seat);
+
+        let action_request: PlayerActionRequest = PlayerActionRequest {
+            owner: next_player.player_address,
+            seat_index: next_seat,
+            room_id: new_gs.room_id,
+            nonce: new_nonce,
+            stack: next_player.stack,
+            contributed: next_player.contributed,
+            highest_bet: new_gs.highest_bet,
+            main_pot: new_gs.main_pot
+        };
+
+        // Return the updated game state and the new action request
+        return (new_gs, action_request);
+    }
+
+    transition gsm_advance_phase_turn_river(
+        gs: GameState, 
+        dealt_card: DealtOneCommunityCard, 
+        last_player_action: PlayerActionResponse,
+        is_turn: bool
+    ) -> (GameState, PlayerActionRequest) {
+
+        // -------------------------------------------------------------------------
+        // 1. Ensure we are still in the PRE_FLOP phase (assume 0u8 == PRE_FLOP)
+        // -------------------------------------------------------------------------
+        assert(is_turn ? gs.current_phase == 1u8 : gs.current_phase == 2u8);
+
+        // -------------------------------------------------------------------------
+        // 2. Ensure all players have already betted. For instance, if your 
+        //    'get_next_player' helper returns 4 when no seats need to bet, 
+        //    we check that here.
+        // -------------------------------------------------------------------------
+        let next_player_index: u8 = get_next_player_turn_index(gs.has_acted_this_round, last_player_action.seat_index, last_player_action.action_type);
+        assert(next_player_index == 4u8);
+
+        // -------------------------------------------------------------------------
+        // 3. Reveal the FLOP by populating community_cards indices [0..2]
+        // -------------------------------------------------------------------------
+        let updated_community_cards: [Card; 5] = [
+            gs.community_cards[0u8],
+            gs.community_cards[1u8],
+            gs.community_cards[2u8],
+            dealt_card.card,
+            gs.community_cards[4u8]
+        ];
+
+        // Move from PRE-FLOP (0) to FLOP (1).
+        
+
+        // -------------------------------------------------------------------------
+        // 4. Bump the nonce (general safeguard for state transitions)
+        // -------------------------------------------------------------------------
+        let new_nonce: u64 = gs.nonce + 1u64;
+
+
+        // -------------------------------------------------------------------------
+        // 5. Create a new PlayerActionRequest for the next betting round
+        //    (You can customize seat selection logic below as needed)
+        // -------------------------------------------------------------------------
+
+        // Determine the next active player after the big blind seat
+        let next_potential_seats: [u8; 4] = [
+            gs.big_blind_seat, 
+            (gs.big_blind_seat + 1u8) % gs.num_players, 
+            (gs.big_blind_seat + 2u8) % gs.num_players, 
+            (gs.big_blind_seat + 3u8) % gs.num_players
+        ];
+        let active_players_mask: u8 = 0u8;
+        for i: u8 in 0u8..4u8 {
+            if next_potential_seats[i] != 0u8 {
+                active_players_mask |= 1u8 << next_potential_seats[i];
+            }
+        }
+
+        let next_seat: u8 = find_next_active_player(active_players_mask, gs.dealer_seat); // TODO: FIX. Also handle the case where the next seats are all folded or all in
+
+        let new_gs: GameState = GameState {
+            owner: gs.owner,
+            num_players: gs.num_players,
+            house_dealer_actor: gs.house_dealer_actor,
+            dealer_seat: gs.dealer_seat,
+            small_blind_seat: gs.small_blind_seat,
+            big_blind_seat: gs.big_blind_seat,
+            small_blind: gs.small_blind,
+            big_blind: gs.big_blind,
+            room_id: gs.room_id,
+
+            current_phase: gs.current_phase + 1u8,
+            community_cards: updated_community_cards,
+            players: gs.players,
+            nonce: new_nonce,
+            highest_bet: gs.highest_bet,
+            main_pot: gs.main_pot,
+            active_player_turn_index: next_seat,
+            has_acted_this_round: active_players_mask
         };
 
         let next_player: Player = select_player(new_gs.players, next_seat);
@@ -921,6 +1031,36 @@ program zkpoker.aleo {
     }
 
 
+    inline find_next_active_player(active_players_mask: u8, dealer_seat: u8) -> u8 {
+        // Create a mask for bits after the dealer (but only up to 4 bits total)
+        let higher_bits_mask: u8 = (((1u8 << 4u8) - 1u8) << dealer_seat) & 15u8; // 15u8 is 0b1111
+        
+        // Get only the active players after the dealer
+        let higher_active_players: u8 = active_players_mask & higher_bits_mask;
+        
+        // If there are active players after the dealer, find the rightmost one
+        if higher_active_players != 0u8 {
+            return find_rightmost_set_bit(higher_active_players);
+        }
+        
+        // If no active players after dealer, look at players before dealer
+        let lower_bits_mask: u8 = ((1u8 << dealer_seat) - 1u8) & 15u8;
+        let lower_active_players: u8 = active_players_mask & lower_bits_mask;
+        
+        // Return the rightmost set bit in the lower active players
+        return find_rightmost_set_bit(lower_active_players);
+    }
+
+    inline find_rightmost_set_bit(mask: u8) -> u8 {
+        // Only need to check 4 bits
+        if (mask & 1u8) != 0u8 { return 0u8; }
+        if (mask & 2u8) != 0u8 { return 1u8; }
+        if (mask & 4u8) != 0u8 { return 2u8; }
+        if (mask & 8u8) != 0u8 { return 3u8; }
+        return 0u8; // Should never reach here if mask != 0
+    }
+
+
     // We need an individual player to show their winning hand 
     // This transition will have a player choose their winning hand and they will demonstrate who will will win
     // Sine the hand is sorted, we can easily verify the hand corresponds to a certain combo
@@ -934,6 +1074,7 @@ program zkpoker.aleo {
         if player_final_hand_request.did_fold {
             return FinalHand {
                 owner: player_final_hand_request.owner,
+                seat_index: player_final_hand_request.seat_index,
                 did_fold: true,
                 final_score: 0u32,
                 player_hand: player_hand
@@ -1020,6 +1161,7 @@ program zkpoker.aleo {
 
         return FinalHand {
             owner: self.caller,
+            seat_index: player_final_hand_request.seat_index,
             did_fold: false,
             final_score: final_score,
             player_hand: player_hand
@@ -1027,21 +1169,49 @@ program zkpoker.aleo {
     }
 
     // 5. Determine winner after getting all the final hands to all the players
-    // transition gsm_determine_winner(
-    //     final_hand1: FinalHand, 
-    //     final_hand2: FinalHand, 
-    //     final_hand3: FinalHand, 
-    //     final_hand4: FinalHand,
-    //     ) -> u8 {
-    //     // First we need to check that the final hands are sorted
-    //     assert(final_hand1.score >= final_hand2.score);
-    //     assert(final_hand2.score >= final_hand3.score);
-    //     assert(final_hand3.score >= final_hand4.score);
+    transition gsm_determine_winner(
+        final_hand1: FinalHand, 
+        final_hand2: FinalHand, 
+        final_hand3: FinalHand, 
+        final_hand4: FinalHand,
+        ) -> [u8; 4] {
+        let score1: u32 = final_hand1.final_score;
+        let score2: u32 = final_hand2.final_score;
+        let score3: u32 = final_hand3.final_score;
+        let score4: u32 = final_hand4.final_score;
 
-    //     // Evaluate final_submissions off-chain or in a circuit, then update
-    //     // gs.final_player_scores or declare winners. 
-    //     return 0u8;
-    // }
+        assert(score1 >= score2);
+        assert(score2 >= score3);
+        assert(score3 >= score4);
+
+        // Check that the seat_index is valid and are all unique
+        assert(final_hand1.seat_index < 4u8);
+        assert(final_hand2.seat_index < 4u8);
+        assert(final_hand3.seat_index < 4u8);
+        assert(final_hand4.seat_index < 4u8);
+        let seat_mask: u8 = 0u8;
+        let seat_indices: [u8; 4] = [
+            final_hand1.seat_index,
+            final_hand2.seat_index,
+            final_hand3.seat_index,
+            final_hand4.seat_index
+        ];
+        for i: u8 in 0u8..4u8 {
+            let seat_bit: u8 = 1u8 << seat_indices[i];
+            assert((seat_mask & seat_bit) == 0u8);
+            seat_mask |= seat_bit;
+        }
+
+        // Now we need to check that the seat_mask is 0b1111
+        assert(seat_mask == 15u8);
+
+        return [
+            final_hand1.seat_index,
+            final_hand2.final_score == score1 ? final_hand2.seat_index : 4u8,
+            final_hand3.final_score == score1 ? final_hand3.seat_index : 4u8,
+            final_hand4.final_score == score1 ? final_hand4.seat_index : 4u8
+        ];
+    }
 
 
     // RoomConfig holds the entire poker game configuration:
