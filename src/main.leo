@@ -291,6 +291,42 @@ program zkpoker.aleo {
         };
     }
 
+    transition house_dealer_create_game_state(room_config: RoomConfig) -> GameState {
+        // Initialize an array of Players with default values
+        let initial_players: [Player; 4] = [
+            Player { player_address: room_config.joined_users[0u8].player_address, stack: room_config.joined_users[0u8].bet, contributed: 0u64, folded: false, all_in: false },
+            Player { player_address: room_config.joined_users[1u8].player_address, stack: room_config.joined_users[1u8].bet, contributed: 0u64, folded: false, all_in: false },
+            Player { player_address: room_config.joined_users[2u8].player_address, stack: room_config.joined_users[2u8].bet, contributed: 0u64, folded: false, all_in: false },
+            Player { player_address: room_config.joined_users[3u8].player_address, stack: room_config.joined_users[3u8].bet, contributed: 0u64, folded: false, all_in: false }
+        ];
+
+        // Construct and return the new GameState record
+        return GameState {
+            owner: room_config.game_state_manager_address,
+            players: initial_players,
+            num_players: room_config.num_joined_users,
+            house_dealer_actor: self.caller,  
+            room_id: room_config.room_id,
+            nonce: 0u64,               
+            small_blind_seat: room_config.small_blind_seat,
+            big_blind_seat: room_config.big_blind_seat,
+            small_blind: room_config.small_blind,
+            big_blind: room_config.big_blind,
+            dealer_seat: room_config.dealer_seat,
+            current_phase: 0u8,      
+            community_cards: null_community_cards(), 
+            highest_bet: 0u64,
+            main_pot: 0u64,
+            has_acted_this_round: 0u8,
+            active_player_turn_index: (room_config.big_blind_seat + 1u8) % room_config.num_joined_users
+        };
+    }
+
+    inline null_community_cards() -> [Card; 5] {
+        let null_card: Card = Card { rank: 13u8, suit: 13u8, index: 52u8 };
+        return [null_card, null_card, null_card, null_card, null_card];
+    }
+
 
     transition house_dealer_deal_player_cards(
         hs: HouseDealerState
@@ -891,7 +927,7 @@ program zkpoker.aleo {
             }
         }
 
-        let next_seat: u8 = find_next_active_player(active_players_mask, gs.dealer_seat); // TODO: FIX. Also handle the case where the next seats are all folded or all in
+        let next_seat: u8 = find_next_active_player(active_players_mask, gs.dealer_seat);
 
         let new_gs: GameState = GameState {
             owner: gs.owner,
@@ -911,7 +947,7 @@ program zkpoker.aleo {
             highest_bet: gs.highest_bet,
             main_pot: gs.main_pot,
             active_player_turn_index: next_seat,
-            has_acted_this_round: 15u8 - active_players_mask
+            has_acted_this_round: active_players_mask ^ 15u8
         };
 
         let next_player: Player = select_player(new_gs.players, next_seat);
@@ -1219,11 +1255,16 @@ program zkpoker.aleo {
     // Empty seats have address 0x000...000
     struct RoomConfig {
         big_blind: u64,
+        big_blind_seat: u8,
         small_blind: u64,
+        small_blind_seat: u8,
+        dealer_seat: u8,
         min_stack: u64,
         seats: u8,
+        room_id: u32,
         joined_users: [PlayerRoomConfig; 4], // Address is 0x000...000 for empty seats
-        num_joined_users: u8
+        num_joined_users: u8,
+        game_state_manager_address: address
     }
 
     record RoomConfigRequest {
@@ -1274,7 +1315,12 @@ program zkpoker.aleo {
             min_stack,
             seats,
             joined_users,
-            num_joined_users: 1u8
+            num_joined_users: 1u8,
+            big_blind_seat: 0u8,
+            small_blind_seat: 0u8,
+            dealer_seat: 0u8,
+            room_id: 0u32,
+            game_state_manager_address: 0group as address
         };
 
         let f: Future = finalize_create_room(config);
@@ -1331,11 +1377,16 @@ program zkpoker.aleo {
         
         let updated_config: RoomConfig = RoomConfig {
             big_blind: config.big_blind,
+            big_blind_seat: config.big_blind_seat,
             small_blind: config.small_blind,
+            small_blind_seat: config.small_blind_seat,
+            dealer_seat: config.dealer_seat,
             min_stack: config.min_stack,
             seats: config.seats,
             joined_users: updated_users,
-            num_joined_users: config.num_joined_users + 1u8
+            num_joined_users: config.num_joined_users + 1u8,
+            room_id: config.room_id,
+            game_state_manager_address: config.game_state_manager_address
         };
         
         // Return updated config and future for finalization
