@@ -1,0 +1,6 @@
+[[package]]
+name = "room_manager.aleo"
+location = "local"
+path = "/Users/johnwu/code/aleo/welcome/zkpoker/room_manager"
+checksum = "6593ab530b746113f6c31ed0066f21c569210970b7fe4bce29a48211003b4322"
+dependencies = []

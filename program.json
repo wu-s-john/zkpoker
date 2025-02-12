@@ -3,5 +3,16 @@
   "version": "0.1.0",
   "description": "",
   "license": "MIT",
-  "dependencies": null
+  "dependencies": [
+    {
+      "name": "room_manager.aleo",
+      "location": "local",
+      "path": "room_manager"
+    },
+    {
+      "name": "dealer.aleo",
+      "location": "local",
+      "path": "dealer"
+    }
+  ]
 }
