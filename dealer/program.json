@@ -1,0 +1,13 @@
+{
+  "program": "dealer.aleo",
+  "version": "0.1.0",
+  "description": "",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "room_manager.aleo",
+      "location": "local",
+      "path": "../room_manager"
+    }
+  ]
+}
