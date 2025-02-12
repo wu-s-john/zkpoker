@@ -1,4 +1,4 @@
-// The 'room_manager' program.
+// The 'room manager' program.
 program room_manager.aleo {
     struct PlayerRoomConfig {
         player_address: address,

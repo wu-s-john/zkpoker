@@ -1,0 +1,13 @@
+{
+  "program": "hand_evaluation.aleo",
+  "version": "0.1.0",
+  "description": "",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "game_state_manager.aleo",
+      "location": "local",
+      "path": "../game_state_manager"
+    }
+  ]
+}

@@ -32,16 +32,6 @@ record HouseDealerStateRecord:
     owner as address.private;
     state as HouseDealerState.private;
 
-record PlayerActionRequest:
-    owner as address.private;
-    seat_index as u8.private;
-    room_id as u32.private;
-    nonce as u64.private;
-    stack as u64.private;
-    contributed as u64.private;
-    highest_bet as u64.private;
-    main_pot as u64.private;
-
 record PlayerHand:
     owner as address.private;
     hole_cards as [Card; 2u32].private;
@@ -69,32 +59,6 @@ record HouseDealerShuffleRequest:
     owner as address.private;
     room_id as u32.private;
     seat_index as u8.private;
-
-struct Player:
-    player_address as address;
-    stack as u64;
-    contributed as u64;
-    folded as boolean;
-    all_in as boolean;
-
-record GameState:
-    owner as address.private;
-    num_players as u8.private;
-    house_dealer_actor as address.private;
-    dealer_seat as u8.private;
-    small_blind_seat as u8.private;
-    big_blind_seat as u8.private;
-    small_blind as u64.private;
-    big_blind as u64.private;
-    room_id as u32.private;
-    current_phase as u8.private;
-    community_cards as [Card; 5u32].private;
-    players as [Player; 4u32].private;
-    nonce as u64.private;
-    highest_bet as u64.private;
-    main_pot as u64.private;
-    active_player_turn_index as u8.private;
-    has_acted_this_round as u8.private;
 
 struct PlayerRoomConfig:
     player_address as address;
@@ -1382,62 +1346,21 @@ function house_dealer_starts_game:
     assert.eq r363 true;
     cast  r2.seat_owner r4.seat_owner r6.seat_owner r8.seat_owner into r364 as [address; 4u32];
     cast r0.room_id r10 0u8 r364 into r365 as HouseDealerState;
-    cast r11.room_config.joined_users[0u32].player_address r11.room_config.joined_users[0u32].bet 0u64 false false into r366 as Player;
-    cast r11.room_config.joined_users[1u32].player_address r11.room_config.joined_users[1u32].bet 0u64 false false into r367 as Player;
-    cast r11.room_config.joined_users[2u32].player_address r11.room_config.joined_users[2u32].bet 0u64 false false into r368 as Player;
-    cast r11.room_config.joined_users[3u32].player_address r11.room_config.joined_users[3u32].bet 0u64 false false into r369 as Player;
-    cast  r366 r367 r368 r369 into r370 as [Player; 4u32];
-    cast 13u8 13u8 52u8 into r371 as Card;
-    cast  r371 r371 r371 r371 r371 into r372 as [Card; 5u32];
-    add r11.room_config.big_blind_seat 1u8 into r373;
-    rem r373 r11.room_config.num_joined_users into r374;
-    cast r11.room_config.game_state_manager_address r11.room_config.num_joined_users self.caller r11.room_config.dealer_seat r11.room_config.small_blind_seat r11.room_config.big_blind_seat r11.room_config.small_blind r11.room_config.big_blind r11.room_config.room_id 0u8 r372 r370 0u64 0u64 0u64 r374 0u8 into r375 as GameState.record;
-    cast r365.room_id r365.deck 8u8 r365.player_addresses into r376 as HouseDealerState;
-    cast  r365.deck.cards1[0u32] r365.deck.cards1[1u32] into r377 as [Card; 2u32];
-    cast r365.player_addresses[0u32] r377 into r378 as PlayerHand.record;
-    cast  r365.deck.cards1[2u32] r365.deck.cards1[3u32] into r379 as [Card; 2u32];
-    cast r365.player_addresses[1u32] r379 into r380 as PlayerHand.record;
-    cast  r365.deck.cards1[4u32] r365.deck.cards1[5u32] into r381 as [Card; 2u32];
-    cast r365.player_addresses[2u32] r381 into r382 as PlayerHand.record;
-    cast  r365.deck.cards1[6u32] r365.deck.cards1[7u32] into r383 as [Card; 2u32];
-    cast r365.player_addresses[3u32] r383 into r384 as PlayerHand.record;
-    is.eq r375.active_player_turn_index 0u8 into r385;
-    not r385 into r386;
-    is.eq r375.active_player_turn_index 1u8 into r387;
-    and r386 r387 into r388;
-    not r387 into r389;
-    is.eq r375.active_player_turn_index 2u8 into r390;
-    and r386 r389 into r391;
-    and r391 r390 into r392;
-    not r390 into r393;
-    and r391 r393 into r394;
-    ternary r392 r375.players[2u32].player_address r375.players[3u32].player_address into r395;
-    ternary r392 r375.players[2u32].stack r375.players[3u32].stack into r396;
-    ternary r392 r375.players[2u32].contributed r375.players[3u32].contributed into r397;
-    ternary r392 r375.players[2u32].folded r375.players[3u32].folded into r398;
-    ternary r392 r375.players[2u32].all_in r375.players[3u32].all_in into r399;
-    cast r395 r396 r397 r398 r399 into r400 as Player;
-    ternary r388 r375.players[1u32].player_address r400.player_address into r401;
-    ternary r388 r375.players[1u32].stack r400.stack into r402;
-    ternary r388 r375.players[1u32].contributed r400.contributed into r403;
-    ternary r388 r375.players[1u32].folded r400.folded into r404;
-    ternary r388 r375.players[1u32].all_in r400.all_in into r405;
-    cast r401 r402 r403 r404 r405 into r406 as Player;
-    ternary r385 r375.players[0u32].player_address r406.player_address into r407;
-    ternary r385 r375.players[0u32].stack r406.stack into r408;
-    ternary r385 r375.players[0u32].contributed r406.contributed into r409;
-    ternary r385 r375.players[0u32].folded r406.folded into r410;
-    ternary r385 r375.players[0u32].all_in r406.all_in into r411;
-    cast r407 r408 r409 r410 r411 into r412 as Player;
-    cast r412.player_address r375.active_player_turn_index r375.room_id r375.nonce r412.stack r412.contributed r375.highest_bet r375.main_pot into r413 as PlayerActionRequest.record;
-    cast self.caller r376 into r414 as HouseDealerStateRecord.record;
-    output r375 as GameState.record;
-    output r414 as HouseDealerStateRecord.record;
-    output r378 as PlayerHand.record;
-    output r380 as PlayerHand.record;
-    output r382 as PlayerHand.record;
-    output r384 as PlayerHand.record;
-    output r413 as PlayerActionRequest.record;
+    cast r365.room_id r365.deck 8u8 r365.player_addresses into r366 as HouseDealerState;
+    cast  r365.deck.cards1[0u32] r365.deck.cards1[1u32] into r367 as [Card; 2u32];
+    cast r365.player_addresses[0u32] r367 into r368 as PlayerHand.record;
+    cast  r365.deck.cards1[2u32] r365.deck.cards1[3u32] into r369 as [Card; 2u32];
+    cast r365.player_addresses[1u32] r369 into r370 as PlayerHand.record;
+    cast  r365.deck.cards1[4u32] r365.deck.cards1[5u32] into r371 as [Card; 2u32];
+    cast r365.player_addresses[2u32] r371 into r372 as PlayerHand.record;
+    cast  r365.deck.cards1[6u32] r365.deck.cards1[7u32] into r373 as [Card; 2u32];
+    cast r365.player_addresses[3u32] r373 into r374 as PlayerHand.record;
+    cast self.caller r366 into r375 as HouseDealerStateRecord.record;
+    output r375 as HouseDealerStateRecord.record;
+    output r368 as PlayerHand.record;
+    output r370 as PlayerHand.record;
+    output r372 as PlayerHand.record;
+    output r374 as PlayerHand.record;
 
 function house_dealer_deal_flop:
     input r0 as HouseDealerState.private;
@@ -1469,9 +1392,3 @@ function house_dealer_deal_river:
     cast r1 r0.deck.cards1[15u32] false r0.room_id into r4 as DealtOneCommunityCard.record;
     output r3 as HouseDealerState.private;
     output r4 as DealtOneCommunityCard.record;
-
-function main:
-    input r0 as u32.public;
-    input r1 as u32.private;
-    add r0 r1 into r2;
-    output r2 as u32.private;

@@ -65,18 +65,6 @@ program dealer.aleo {
         state: HouseDealerState
     }
 
-    // The GameStateManager will request actions from the players. 
-    record PlayerActionRequest {
-        owner: address,
-        seat_index: u8,
-        room_id: u32,
-        nonce: u64,                 // identifies the current request, matching GameState.nonce
-        stack: u64,
-        contributed: u64,
-        highest_bet: u64,
-        main_pot: u64
-    }
-
     // Private hole cards belong in a record:
     record PlayerHand {
         owner: address,       // Address that owns these hole cards
@@ -104,34 +92,6 @@ program dealer.aleo {
         owner: address,
         room_id: u32,
         seat_index: u8,
-    }
-
-    // The main GameState struct holds publicly visible information.
-    record GameState {
-        owner: address,
-        num_players: u8,
-        house_dealer_actor: address,
-
-
-        // Static Per Match
-        dealer_seat: u8, // It is the seat of a player
-        small_blind_seat: u8, // dealer_seat + 1
-        big_blind_seat: u8, // dealer_seat + 2
-        small_blind: u64,
-        big_blind: u64,
-        room_id: u32,
-
-        // Changes Per Round
-        current_phase: u8,              // 0=PRE_FLOP, 1=FLOP, etc.
-        community_cards: [Card; 5],     // Indices 0-2 for flop, 3 for turn, 4 for river
-
-        // Changing Per Player's decision
-        players: [Player; 4],
-        nonce: u64, // used to track valid state transitions   
-        highest_bet: u64,
-        main_pot: u64,
-        active_player_turn_index: u8,
-        has_acted_this_round: u8, // A bitmask of which players have acted this round
     }
 
     inline apply_permutation(
@@ -271,16 +231,15 @@ program dealer.aleo {
         perm_table3: PermutatedTable,
         shf4: PlayerProposedShuffle,
         perm_table4: PermutatedTable,
-        final_perm_deck: Deck, // TODO: this needs to be a record
+        final_perm_deck: Deck,
         room_config_request: room_manager.aleo/RoomConfigRequest
     ) -> (
-        GameState, 
+        // GameState, // TODO: need to remove this
         HouseDealerStateRecord, 
         PlayerHand, 
         PlayerHand, 
         PlayerHand, 
-        PlayerHand,
-        PlayerActionRequest
+        PlayerHand
     ) {
 
         // 1) Apply all permutations to produce the final HouseDealerState.
@@ -364,36 +323,6 @@ program dealer.aleo {
             ]
         };
 
-        // 2) Create the new GameState record from the room config.
-        // Initialize an array of Players with default values
-        let initial_players: [Player; 4] = [
-            Player { player_address: room_config_request.room_config.joined_users[0u8].player_address, stack: room_config_request.room_config.joined_users[0u8].bet, contributed: 0u64, folded: false, all_in: false },
-            Player { player_address: room_config_request.room_config.joined_users[1u8].player_address, stack: room_config_request.room_config.joined_users[1u8].bet, contributed: 0u64, folded: false, all_in: false },
-            Player { player_address: room_config_request.room_config.joined_users[2u8].player_address, stack: room_config_request.room_config.joined_users[2u8].bet, contributed: 0u64, folded: false, all_in: false },
-            Player { player_address: room_config_request.room_config.joined_users[3u8].player_address, stack: room_config_request.room_config.joined_users[3u8].bet, contributed: 0u64, folded: false, all_in: false }
-        ];
-
-        // Construct and return the new GameState record
-        let game_state: GameState = GameState {
-            owner: room_config_request.room_config.game_state_manager_address,
-            players: initial_players,
-            num_players: room_config_request.room_config.num_joined_users,
-            house_dealer_actor: self.caller,  
-            room_id: room_config_request.room_config.room_id,
-            nonce: 0u64,               
-            small_blind_seat: room_config_request.room_config.small_blind_seat,
-            big_blind_seat: room_config_request.room_config.big_blind_seat,
-            small_blind: room_config_request.room_config.small_blind,
-            big_blind: room_config_request.room_config.big_blind,
-            dealer_seat: room_config_request.room_config.dealer_seat,
-            current_phase: 0u8,      
-            community_cards: null_community_cards(), 
-            highest_bet: 0u64,
-            main_pot: 0u64,
-            has_acted_this_round: 0u8,
-            active_player_turn_index: (room_config_request.room_config.big_blind_seat + 1u8) % room_config_request.room_config.num_joined_users
-        };
-
         // 3) Deal two hole cards to each player, returning an updated HouseDealerState plus 4 PlayerHands.
         let deck: Deck = final_dealer_state.deck;
 
@@ -432,35 +361,17 @@ program dealer.aleo {
             hole_cards: [card3_1, card3_2]
         };
 
-        // Create a PlayerActionRequest for the seat that is about to act first (after blinds).
-        let next_seat: u8 = game_state.active_player_turn_index;
-        let next_player: Player = select_player(game_state.players, next_seat);
-        
-        let first_request: PlayerActionRequest = PlayerActionRequest {
-            owner: next_player.player_address,
-            seat_index: next_seat,
-            room_id: game_state.room_id,
-            nonce: game_state.nonce,
-            stack: next_player.stack,
-            contributed: next_player.contributed,
-            highest_bet: game_state.highest_bet,
-            main_pot: game_state.main_pot
-        };
-
         let dealer_state_record: HouseDealerStateRecord = HouseDealerStateRecord {
             owner: self.caller,
             state: new_dealer_state
         };
 
-        // Return everything needed to continue: the new GameState, dealer state, each player's hole cards, and the initial PlayerActionRequest.
         return (
-            game_state,
             dealer_state_record,
             p0_hand,
             p1_hand,
             p2_hand,
             p3_hand,
-            first_request
         );
     }
 
@@ -563,6 +474,7 @@ program dealer.aleo {
         return (new_dealer_state, dealt_one);
     }
 
+    // Found a bug where you can't inline this function for some reason
     function grand_product_permutation_check(
         random_alpha: u64,
         random_beta: u64,
@@ -586,33 +498,5 @@ program dealer.aleo {
         }
 
         return product == product_sorted;
-    }
-
-    inline verify_permutation(
-        perm: Permutation
-    ) -> bool {
-        let bitset: u64 = 0u64;
-        for i: u8 in 0u8..26u8 {
-            bitset |= 1u64 << perm.perm1[i];
-            bitset |= 1u64 << perm.perm2[i];
-        }
-        return bitset == 0u64; // TODO: This is a placeholder
-    }
-
-    inline select_player(players: [Player; 4], seat_index: u8) -> Player {
-        if seat_index == 0u8 {
-            return players[0u8];
-        } else if seat_index == 1u8 {
-            return players[1u8];
-        } else if seat_index == 2u8 {
-            return players[2u8];
-        } else {
-            return players[3u8];
-        }
-    }
-
-    transition main(public a: u32, b: u32) -> u32 {
-        let c: u32 = a + b;
-        return c;
     }
 }

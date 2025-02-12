@@ -1,6 +1,28 @@
 {
-    "program": "zkpoker.aleo",
-    "version": "0.0.0",
-    "description": "",
-    "license": "MIT"
+  "program": "zkpoker.aleo",
+  "version": "0.1.0",
+  "description": "",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "room_manager.aleo",
+      "location": "local",
+      "path": "room_manager"
+    },
+    {
+      "name": "dealer.aleo",
+      "location": "local",
+      "path": "dealer"
+    },
+    {
+      "name": "game_state_manager.aleo",
+      "location": "local",
+      "path": "game_state_manager"
+    },
+    {
+      "name": "hand_evaluation.aleo",
+      "location": "local",
+      "path": "hand_evaluation"
+    }
+  ]
 }

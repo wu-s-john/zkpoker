@@ -1,0 +1,13 @@
+[[package]]
+name = "room_manager.aleo"
+location = "local"
+path = "/Users/johnwu/code/aleo/welcome/zkpoker/hand_evaluation/../game_state_manager/../room_manager"
+checksum = "6593ab530b746113f6c31ed0066f21c569210970b7fe4bce29a48211003b4322"
+dependencies = []
+
+[[package]]
+name = "dealer.aleo"
+location = "local"
+path = "/Users/johnwu/code/aleo/welcome/zkpoker/hand_evaluation/../game_state_manager/../dealer"
+checksum = "f7dbfe6c0b71edeb677e3b4c5c369849620739c8a571e554f3942117a5fcee0e"
+dependencies = ["room_manager.aleo"]

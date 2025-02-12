@@ -1,4 +1,4 @@
-# dealer.aleo
+# hand_evaluation.aleo
 
 ## Build Guide
 
