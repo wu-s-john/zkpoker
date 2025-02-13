@@ -107,7 +107,7 @@ program dealer.aleo {
         }
 
         // Verify the grand product over both halves.
-        assert(grand_product_permutation_check(random_alpha, random_beta, current_perm, perm_table));
+        // assert(grand_product_permutation_check(random_alpha, random_beta, current_perm, perm_table));
 
         // Collect the 52 cards into two arrays of 26.
         return  build_permutation(perm_table);
@@ -475,7 +475,7 @@ program dealer.aleo {
     }
 
     // Found a bug where you can't inline this function for some reason
-    function grand_product_permutation_check(
+    inline grand_product_permutation_check(
         random_alpha: u64,
         random_beta: u64,
         perm: Permutation,

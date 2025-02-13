@@ -1,4 +1,4 @@
-# zkpoker_jwu.aleo
+# dealer.aleo
 
 ## Build Guide
 

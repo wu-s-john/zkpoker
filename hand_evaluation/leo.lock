@@ -1,20 +1,20 @@
 [[package]]
 name = "room_manager.aleo"
 location = "local"
-path = "/Users/johnwu/code/aleo/welcome/zkpoker/hand_evaluation/../game_state_manager/../room_manager"
+path = "/Users/johnwu/code/aleo/welcome/zkpoker/room_manager"
 checksum = "6593ab530b746113f6c31ed0066f21c569210970b7fe4bce29a48211003b4322"
 dependencies = []
 
 [[package]]
 name = "dealer.aleo"
 location = "local"
-path = "/Users/johnwu/code/aleo/welcome/zkpoker/hand_evaluation/../game_state_manager/../dealer"
-checksum = "f7dbfe6c0b71edeb677e3b4c5c369849620739c8a571e554f3942117a5fcee0e"
+path = "/Users/johnwu/code/aleo/welcome/zkpoker/dealer"
+checksum = "034d5cf4cda46cf67f299a4750b4916ef71b2a0d82a1cc9661b0b91448f1176a"
 dependencies = ["room_manager.aleo"]
 
 [[package]]
 name = "game_state_manager.aleo"
 location = "local"
-path = "/Users/johnwu/code/aleo/welcome/zkpoker/hand_evaluation/../game_state_manager"
+path = "/Users/johnwu/code/aleo/welcome/zkpoker/game_state_manager"
 checksum = "e78215daf1f93a5185f9b9661a7f243a2ec41647c41af945a91a281cf0da3614"
 dependencies = ["room_manager.aleo", "dealer.aleo"]

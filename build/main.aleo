@@ -1,6 +1,6 @@
 import room_manager.aleo;
 import dealer.aleo;
-program zkpoker.aleo;
+program zkpoker_jwu.aleo;
 
 struct PlayerRoomConfig:
     player_address as address;

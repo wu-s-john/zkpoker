@@ -1,4 +1,4 @@
-# zkpoker_jwu.aleo
+# room_manager.aleo
 
 ## Build Guide
 

@@ -2,7 +2,7 @@ import dealer.aleo;
 import room_manager.aleo;
 
 // The 'hello' program.
-program zkpoker.aleo {
+program zkpoker_jwu.aleo {
     // -----------------------------------
     // HouseDealer Functions and Transitions
     // -----------------------------------

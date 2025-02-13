@@ -1,4 +1,4 @@
-# zkpoker_jwu.aleo
+# game_state_manager.aleo
 
 ## Build Guide
 
